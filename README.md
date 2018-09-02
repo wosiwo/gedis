@@ -2,8 +2,8 @@
 a slimple demo that use go to realize redis like nosql 
 
 
-## 使用go实现类似redis的nosql服务
-## 目前已经实现kv,hash,zset等数据类型
+ 使用go实现类似redis的nosql服务
+ 目前已经实现kv,hash,zset等数据类型
 * 启动服务
   ```
   go run kv.go
