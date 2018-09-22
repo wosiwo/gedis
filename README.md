@@ -6,7 +6,7 @@ a slimple demo that use go to realize redis like nosql
  目前已经实现kv,hash,zset等数据类型
 * 启动服务
   ```
-  go run kv.go
+  go run server.go
   ```
 * 客户端直接使用redis-cli
   ```
