@@ -13,13 +13,13 @@ a slimple demo that use go to realize redis like nosql
   go run kvClient.go
   ```
 ### TODO
-* [x]支持redis通信协议
 * 实现redis中db的数据结构
 * 支持set数据类型
 * 支持持久化
 * 支持事务ACID特性
 * 性能优化
-
+### DONE
+* 支持redis通信协议
 
 > 引用代码
 * [https://github.com/chaozh/MIT-6.824/issues/3)
