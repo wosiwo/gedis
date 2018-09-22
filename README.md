@@ -8,9 +8,9 @@ a slimple demo that use go to realize redis like nosql
   ```
   go run kv.go
   ```
-* 客户端调用
+* 客户端直接使用redis-cli
   ```
-  go run kvClient.go
+  redis-cli -p 9999
   ```
 ### TODO
 * 实现redis中db的数据结构
