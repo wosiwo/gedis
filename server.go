@@ -7,7 +7,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
-	"./zset"
+	"./table"
 )
 
 func main() {
@@ -24,7 +24,7 @@ func main() {
 	ht.Data = map[string]*handle.HASHTBVal{}
 
 	z := new(handle.ZSETAPI)
-	z.Data = map[string]*zset.ZSetType{} //zset.New()
+	z.Data = map[string]*table.ZSetType{} //zset.New()
 
 	for {
 		tcpConn, err := tcpListener.AcceptTCP()

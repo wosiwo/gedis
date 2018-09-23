@@ -1,10 +1,9 @@
 package handle
 
 import (
+	"../table"
 	//"bufio"
 	"fmt"
-
-	"../zset"
 	"sync"
 )
 
@@ -104,7 +103,7 @@ type HASHTB struct {
 }
 type ZSETAPI struct {
 	Mu   sync.Mutex
-	Data map[string]*zset.ZSetType
+	Data map[string]*table.ZSetType
 }
 //
 //func server() {
@@ -232,7 +231,7 @@ func ZScore(z *ZSETAPI, args *ZScoreArgs, reply *ZScoreReply) error {
 func ZAdd(z *ZSETAPI, args *ZAddArgs, reply *ZAddReply) error {
 	z.Mu.Lock()
 	defer z.Mu.Unlock()
-	zval := zset.New()
+	zval := table.New()
 	zval.Add(args.Score,args.Mem)
 	z.Data[args.Key] = zval
 	fmt.Printf("ZAdd key %s Score %s Mem %s\n", args.Key,args.Score,args.Mem)
