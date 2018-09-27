@@ -25,6 +25,13 @@ type PutArgs struct {
 	Value string
 }
 
+
+type Args struct {
+	Key string
+	Mem string
+	Mems[] string
+}
+
 type Reply struct {
 	Err Err
 	Value string
@@ -105,6 +112,12 @@ type ZSETAPI struct {
 	Mu   sync.Mutex
 	Data map[string]*table.ZSetType
 }
+
+type SETAPI struct {
+	Mu   sync.Mutex
+	Data map[string]*table.Set
+}
+
 //
 //func server() {
 //	rpcs := rpc.NewServer()
@@ -235,6 +248,30 @@ func ZAdd(z *ZSETAPI, args *ZAddArgs, reply *ZAddReply) error {
 	zval.Add(args.Score,args.Mem)
 	z.Data[args.Key] = zval
 	fmt.Printf("ZAdd key %s Score %s Mem %s\n", args.Key,args.Score,args.Mem)
+	reply.Err = OK
+	return nil
+}
+
+func SAdd(s *SETAPI, args *Args, reply *Reply) error {
+	s.Mu.Lock()
+	defer s.Mu.Unlock()
+	var sval table.Set
+	if _, ok := s.Data[args.Key]; !ok {
+		//不存在存在
+		sval = *table.NewSet(args.Mems...)
+	}else{
+		sval = *s.Data[args.Key]
+		sval.HsVal.Add(args.Mems...)
+	}
+
+	//TODO 判断是否使用整数集合
+	//if(sval.EncodeType == 0){
+	//	sval.IntVal.Add(args.Mems...)
+	//}else{
+	//	sval.HsVal.Add(args.Mems...)
+	//}
+	s.Data[args.Key] = &sval
+	fmt.Printf("ZAdd key %s Score %s Mem %s\n", args.Key)
 	reply.Err = OK
 	return nil
 }

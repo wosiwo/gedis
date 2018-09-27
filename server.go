@@ -26,6 +26,8 @@ func main() {
 	z := new(handle.ZSETAPI)
 	z.Data = map[string]*table.ZSetType{} //zset.New()
 
+	s := new(handle.SETAPI)
+	s.Data = map[string]*table.Set{}
 	for {
 		tcpConn, err := tcpListener.AcceptTCP()
 		if err != nil {
@@ -33,12 +35,12 @@ func main() {
 		}
 
 		fmt.Println("A client connected : " + tcpConn.RemoteAddr().String())
-		go tcpPipe(tcpConn,kv,ht,z,err)
+		go tcpPipe(tcpConn,kv,ht,z,s,err)
 	}
 
 }
 
-func tcpPipe(conn *net.TCPConn,kv *handle.KV,ht *handle.HASHTB,z *handle.ZSETAPI,err error) {
+func tcpPipe(conn *net.TCPConn,kv *handle.KV,ht *handle.HASHTB,z *handle.ZSETAPI,s *handle.SETAPI,err error) {
 	ipStr := conn.RemoteAddr().String()
 	defer func() {
 		fmt.Println("disconnected :" + ipStr)
@@ -50,7 +52,7 @@ func tcpPipe(conn *net.TCPConn,kv *handle.KV,ht *handle.HASHTB,z *handle.ZSETAPI
 	cmdstr := string(command[:n])
 	fmt.Println("cmdstr"+cmdstr)
 
-	reply := parseCmd(cmdstr,kv,ht,z)
+	reply := parseCmd(cmdstr,kv,ht,z,s)
 	//request := protocol.GetRequest(cmdstr)
 	//for {
 	//	message, err := reader.ReadString('\n')
@@ -65,7 +67,7 @@ func tcpPipe(conn *net.TCPConn,kv *handle.KV,ht *handle.HASHTB,z *handle.ZSETAPI
 	//}
 }
 
-func parseCmd(cmdStr string,kv *handle.KV,ht *handle.HASHTB,z *handle.ZSETAPI) string {
+func parseCmd(cmdStr string,kv *handle.KV,ht *handle.HASHTB,z *handle.ZSETAPI,s *handle.SETAPI) string {
 	cmdStrArr := strings.Split(cmdStr,"\r\n")
 
 	cmd := cmdStrArr[2]
@@ -128,7 +130,13 @@ func parseCmd(cmdStr string,kv *handle.KV,ht *handle.HASHTB,z *handle.ZSETAPI) s
 			reqArgs.Mem = cmdStrArr[6]
 			handle.ZScore(z, &reqArgs,&reply)
 			replyVal = strconv.FormatFloat(reply.Value, 'f', 6, 64)
-
+		case cmd == "sadd" && cmdLen>=8:
+			var reqArgs handle.Args
+			var reply handle.Reply
+			reqArgs.Key = key
+			reqArgs.Mems = append(reqArgs.Mems,cmdStrArr[6])
+			handle.SAdd(s, &reqArgs,&reply)
+			replyVal = "+OK"
 		default:
 			//var reply handle.GetReply
 			replyVal = "+Error"

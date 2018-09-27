@@ -2,6 +2,7 @@ package table
 
 import (
 	"fmt"
+	"strconv"
 )
 
 const DEFAULT_MAX_INTHashSet_LEN = 512
@@ -10,6 +11,7 @@ type Set struct {
 	EncodeType int		//0:整数集合 1:哈希
 	HsVal HashSet
 	IntVal IntSet
+	Val interface{}
 }
 
 type People struct {
@@ -24,7 +26,7 @@ func (p People) Say() {
 
 // 新建集合对象
 // 可以传入初始元素
-func NewSet(items ...interface{}) *Set {
+func NewSet(items ...string) *Set {
 	ifInt,intItems,strItems := CheckIfInt(items...)
 	if(len(items)<=DEFAULT_MAX_INTHashSet_LEN && ifInt){
 		s := &Set{
@@ -42,25 +44,25 @@ func NewSet(items ...interface{}) *Set {
 	s.HsVal.Add(strItems...)
 	return s
 }
-
 /**
   判断是否所有元素都是int
  */
-func CheckIfInt(items... interface{}) (bool,[]int,[]string) {
+func CheckIfInt(items... string) (bool,[]int,[]string) {
 	ifAllInt := true
 	var intItems[] int
 	var strItems[] string
 	for _, v := range items {
-		switch  v :=v.(type) {
-		case int:
-			intItems = append(intItems, v)
-		case string:
+		vint, err := strconv.Atoi(v)
+		//fmt.Println(v)
+		//fmt.Println(err)
+		if(err == nil){
+			intItems = append(intItems, vint)
+		}else{
+
 			ifAllInt = false
 			strItems = append(strItems, v)
-		default:
-			ifAllInt = false
-			//break
 		}
+
 	}
 	return ifAllInt,intItems,strItems
 }

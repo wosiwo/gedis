@@ -92,18 +92,18 @@ func (s *HashSet) Empty() bool {
 	defer s.Unlock()
 	return len(s.Val) == 0
 }
-
-// 获取元素列表（无序）
-func (s *HashSet) List() []int {
-	s.RLock()
-	defer s.RUnlock()
-	//TODO 遍历map元素
-	list := make(map[string]bool)
-	for item := range s.Val {
-		list = append(list, item)
-	}
-	return list
-}
+//
+//// 获取元素列表（无序）
+//func (s *HashSet) List() []int {
+//	s.RLock()
+//	defer s.RUnlock()
+//	//TODO 遍历map元素
+//	list := make(map[string]bool)
+//	for item := range s.Val {
+//		list = append(list, item)
+//	}
+//	return list
+//}
 
 
 // 并集
