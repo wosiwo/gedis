@@ -28,7 +28,7 @@ func (p People) Say() {
 // 可以传入初始元素
 func NewSet(items ...string) *Set {
 	ifInt,intItems,strItems := CheckIfInt(items...)
-	if(len(items)<=DEFAULT_MAX_INTHashSet_LEN && ifInt){
+	if(len(items)<=DEFAULT_MAX_INTHashSet_LEN && ifInt && 1==2){
 		s := &Set{
 			EncodeType: 0,
 			IntVal: *NewIntSet(intItems...),

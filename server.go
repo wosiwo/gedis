@@ -134,10 +134,25 @@ func parseCmd(cmdStr string,kv *handle.KV,ht *handle.HASHTB,z *handle.ZSETAPI,s 
 			var reqArgs handle.Args
 			var reply handle.Reply
 			reqArgs.Key = key
+			//TODO 支持多个元素
 			reqArgs.Mems = append(reqArgs.Mems,cmdStrArr[6])
+			reqArgs.Mems = append(reqArgs.Mems,cmdStrArr[8])
 			handle.SAdd(s, &reqArgs,&reply)
 			replyVal = "+OK"
-		default:
+		case cmd == "scard" && cmdLen>=6:
+			var reqArgs handle.Args
+			var reply handle.Reply
+			reqArgs.Key = key
+			handle.SCard(s, &reqArgs,&reply)
+			replyVal = reply.Value
+		case cmd == "smembers" && cmdLen>=6:
+			var reqArgs handle.Args
+			var reply handle.Reply
+			reqArgs.Key = key
+			handle.SMembers(s, &reqArgs,&reply)
+			replyVal = reply.Value
+
+	default:
 			//var reply handle.GetReply
 			replyVal = "+Error"
 	}
