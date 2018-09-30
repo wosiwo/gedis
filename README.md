@@ -15,6 +15,7 @@ a slimple demo that use go to realize redis like nosql
 ### TODO
 * 实现redis中db的数据结构
 * 时间任务，清理过期key
+* 页面置换算法LRU,LFU
 * 主从同步
 * 支持持久化
 * 支持事务ACID特性
