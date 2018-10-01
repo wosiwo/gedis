@@ -19,6 +19,8 @@ a slimple demo that use go to realize redis like nosql
 * 支持持久化
 * 支持事务ACID特性
 * 性能优化
+* 使用协程的情况下，处理并发冲突
+
 ### DONE
 * 统一db的存储结构
 * 支持redis通信协议

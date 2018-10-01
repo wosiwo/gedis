@@ -3,7 +3,7 @@ package handle
 import (
 	"../table"
 	"strconv"
-
+	"container/list"
 	//"bufio"
 	"fmt"
 	"sync"
@@ -23,7 +23,8 @@ const (
   值对象
  */
 type ValueObj struct {
-	Datatype int8		// 0:string 1:hash 2:set 3:zset
+	Mu   sync.Mutex
+	Datatype int8		// 0:string 1:hash 2:set 3:zset 4:list
 	Value interface{}
 }
 /**
@@ -79,21 +80,26 @@ func (db *RedisDB) Get(args *Args, reply *Reply) error {
 	return nil
 }
 
-func (db *RedisDB) Put(args *Args, reply *Reply) error {
-	db.Mu.Lock()
-	defer db.Mu.Unlock()
+func (db *RedisDB) Set(args *Args, reply *Reply) error {
+	var valObj *ValueObj
+	if _, ok := db.Dict[args.Key]; !ok {
+		db.Mu.Lock()	//创建新键值对时才使用全局锁
+		defer db.Mu.Unlock()
 
-	val := new(ValueObj)
-	val.Value = args.Value
-	val.Datatype = 0
-	db.Dict[args.Key] = *val
+		valObj := new(ValueObj)
+		valObj.Value = args.Value
+		valObj.Datatype = 0
+	}else{
+		valObj := db.Dict[args.Key]
+		valObj.Value = args.Value
+	}
+
+	db.Dict[args.Key] = *valObj
 	reply.Err = OK
 	return nil
 }
 //HASH
 func (db *RedisDB) HGet(args *Args, reply *Reply) error {
-	db.Mu.Lock()
-	defer db.Mu.Unlock()
 	hsObj, ok := db.Dict[args.Key]
 	var  val string
 	if(ok){
@@ -114,16 +120,25 @@ func (db *RedisDB) HGet(args *Args, reply *Reply) error {
 }
 
 func (db *RedisDB) HSet(args *Args, reply *Reply) error {
-	db.Mu.Lock()
-	defer db.Mu.Unlock()
-	var hsval = new(HASHTBVal)
-	var valObj = new(ValueObj)
-	valObj.Datatype = 1
+	var valObj *ValueObj
+	if _, ok := db.Dict[args.Key]; !ok {
+		db.Mu.Lock()	//创建新键值对时才使用全局锁
+		defer db.Mu.Unlock()
+
+		var hsval = new(HASHTBVal)
+		var valObj = new(ValueObj)
+		valObj.Datatype = 1
 
 
-	hsval.Data = make(map[string]string)
-	hsval.Data[args.Field] = args.Value
-	valObj.Value = hsval
+		hsval.Data = make(map[string]string)
+		hsval.Data[args.Field] = args.Value
+		valObj.Value = hsval
+	}else{
+		valObj := db.Dict[args.Key]
+		hsval := valObj.Value.(*HASHTBVal)
+		hsval.Data[args.Field] = args.Value
+	}
+
 
 	db.Dict[args.Key] = *valObj
 
@@ -154,15 +169,24 @@ func (db *RedisDB) ZScore(args *Args, reply *Reply) error {
 }
 
 func (db *RedisDB) ZAdd(args *Args, reply *Reply) error {
-	db.Mu.Lock()
-	defer db.Mu.Unlock()
-	zval := table.New()
-	zval.Add(args.Score,args.Mem)
+	var valObj *ValueObj
+	if _, ok := db.Dict[args.Key]; !ok {
+		db.Mu.Lock()	//创建新键值对时才使用全局锁
+		defer db.Mu.Unlock()
 
-	//值对象
-	valObj := new(ValueObj)
-	valObj.Value = zval
-	valObj.Datatype = 3
+		zval := table.New()
+		zval.Add(args.Score,args.Mem)
+
+		//值对象
+		valObj := new(ValueObj)
+		valObj.Value = zval
+		valObj.Datatype = 3
+	}else{
+		valObj := db.Dict[args.Key]
+		zval := valObj.Value.(*table.ZSetType)
+		zval.Add(args.Score,args.Mem)
+	}
+
 
 	db.Dict[args.Key] = *valObj
 	fmt.Printf("ZAdd key %s Score %s Mem %s\n", args.Key,args.Score,args.Mem)
@@ -171,12 +195,17 @@ func (db *RedisDB) ZAdd(args *Args, reply *Reply) error {
 }
 
 func (db *RedisDB) SAdd(args *Args, reply *Reply) error {
-	db.Mu.Lock()
-	defer db.Mu.Unlock()
 	var sval table.Set
+	var valObj *ValueObj
 	if _, ok := db.Dict[args.Key]; !ok {
+		db.Mu.Lock()	//创建新键值对时才使用全局锁
+		defer db.Mu.Unlock()
 		//不存在存在
 		sval = *table.NewSet(args.Mems...)
+		//值对象
+		valObj := new(ValueObj)
+		valObj.Value = &sval
+		valObj.Datatype = 2
 	}else{
 		valObj := db.Dict[args.Key]
 		sval = valObj.Value.(table.Set)
@@ -189,10 +218,7 @@ func (db *RedisDB) SAdd(args *Args, reply *Reply) error {
 	//}else{
 	//	sval.HsVal.Add(args.Mems...)
 	//}
-	//值对象
-	valObj := new(ValueObj)
-	valObj.Value = &sval
-	valObj.Datatype = 2
+
 
 	db.Dict[args.Key] = *valObj
 	fmt.Printf("SAdd key %s Score %s Mem \n", args.Key)
@@ -202,8 +228,6 @@ func (db *RedisDB) SAdd(args *Args, reply *Reply) error {
 }
 
 func (db *RedisDB) SCard(args *Args, reply *Reply) error {
-	db.Mu.Lock()
-	defer db.Mu.Unlock()
 	var sval *table.Set
 	if _, ok := db.Dict[args.Key]; !ok {
 		//不存在存在
@@ -227,8 +251,6 @@ func (db *RedisDB) SCard(args *Args, reply *Reply) error {
 	return nil
 }
 func (db *RedisDB) SMembers(args *Args, reply *Reply) error {
-	db.Mu.Lock()
-	defer db.Mu.Unlock()
 	var sval *table.Set
 	if _, ok := db.Dict[args.Key]; !ok {
 		//不存在存在
@@ -250,3 +272,4 @@ func (db *RedisDB) SMembers(args *Args, reply *Reply) error {
 	reply.Err = OK
 	return nil
 }
+

@@ -94,7 +94,7 @@ func parseCmd(cmdStr string) string {
 			var reply handle.Reply
 			reqArgs.Key = key
 			reqArgs.Value = cmdStrArr[6]
-			db.Put(&reqArgs,&reply)
+			db.Set(&reqArgs,&reply)
 			fmt.Println("tt")
 			replyVal = "+OK"
 			fmt.Println(reply.Value)
