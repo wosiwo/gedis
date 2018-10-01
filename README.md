@@ -3,7 +3,7 @@ a slimple demo that use go to realize redis like nosql
 
 
  使用go实现类似redis的nosql服务
- 目前已经实现kv,hash,zset等数据类型
+ 目前已经实现kv,hash,zset,set等数据类型
 * 启动服务
   ```
   go run server.go
@@ -22,7 +22,7 @@ a slimple demo that use go to realize redis like nosql
 ### DONE
 * 统一db的存储结构
 * 支持redis通信协议
-* 使用纯go实现跳跃表
+* 使用纯go实现的跳跃表
 * 支持set数据类型
 > 引用代码
 * [https://github.com/chaozh/MIT-6.824/issues/3)
