@@ -155,6 +155,22 @@ func parseCmd(cmdStr string) string {
 			reqArgs.Key = key
 			db.SMembers(&reqArgs,&reply)
 			replyVal = reply.Value
+		case cmd == "lpush" && cmdLen>=10:
+			var reqArgs handle.Args
+			var reply handle.Reply
+			reqArgs.Key = key
+			//TODO 支持多个元素
+			reqArgs.Mems = append(reqArgs.Mems,cmdStrArr[6])
+			reqArgs.Mems = append(reqArgs.Mems,cmdStrArr[8])
+
+			db.LPush(&reqArgs,&reply)
+			replyVal = "+OK"
+		case cmd == "lpop" && cmdLen>=6:
+			var reqArgs handle.Args
+			var reply handle.Reply
+			reqArgs.Key = key
+			db.LPop(&reqArgs,&reply)
+			replyVal = reply.Value
 
 	default:
 			//var reply handle.GetReply

@@ -81,20 +81,20 @@ func (db *RedisDB) Get(args *Args, reply *Reply) error {
 }
 
 func (db *RedisDB) Set(args *Args, reply *Reply) error {
-	var valObj *ValueObj
+	var valObj ValueObj
 	if _, ok := db.Dict[args.Key]; !ok {
 		db.Mu.Lock()	//创建新键值对时才使用全局锁
 		defer db.Mu.Unlock()
 
-		valObj := new(ValueObj)
+		valObj = *new(ValueObj)
 		valObj.Value = args.Value
 		valObj.Datatype = 0
 	}else{
-		valObj := db.Dict[args.Key]
+		valObj = db.Dict[args.Key]
 		valObj.Value = args.Value
 	}
 
-	db.Dict[args.Key] = *valObj
+	db.Dict[args.Key] = valObj
 	reply.Err = OK
 	return nil
 }
@@ -120,13 +120,13 @@ func (db *RedisDB) HGet(args *Args, reply *Reply) error {
 }
 
 func (db *RedisDB) HSet(args *Args, reply *Reply) error {
-	var valObj *ValueObj
+	var valObj ValueObj
 	if _, ok := db.Dict[args.Key]; !ok {
 		db.Mu.Lock()	//创建新键值对时才使用全局锁
 		defer db.Mu.Unlock()
 
 		var hsval = new(HASHTBVal)
-		var valObj = new(ValueObj)
+		valObj = *new(ValueObj)
 		valObj.Datatype = 1
 
 
@@ -134,13 +134,13 @@ func (db *RedisDB) HSet(args *Args, reply *Reply) error {
 		hsval.Data[args.Field] = args.Value
 		valObj.Value = hsval
 	}else{
-		valObj := db.Dict[args.Key]
+		valObj = db.Dict[args.Key]
 		hsval := valObj.Value.(*HASHTBVal)
 		hsval.Data[args.Field] = args.Value
 	}
 
 
-	db.Dict[args.Key] = *valObj
+	db.Dict[args.Key] = valObj
 
 	fmt.Printf("HSet key %s Field %s Value %s\n", args.Key,args.Field,args.Value)
 	reply.Err = OK
@@ -169,7 +169,7 @@ func (db *RedisDB) ZScore(args *Args, reply *Reply) error {
 }
 
 func (db *RedisDB) ZAdd(args *Args, reply *Reply) error {
-	var valObj *ValueObj
+	var valObj ValueObj
 	if _, ok := db.Dict[args.Key]; !ok {
 		db.Mu.Lock()	//创建新键值对时才使用全局锁
 		defer db.Mu.Unlock()
@@ -178,37 +178,37 @@ func (db *RedisDB) ZAdd(args *Args, reply *Reply) error {
 		zval.Add(args.Score,args.Mem)
 
 		//值对象
-		valObj := new(ValueObj)
+		valObj = *new(ValueObj)
 		valObj.Value = zval
 		valObj.Datatype = 3
 	}else{
-		valObj := db.Dict[args.Key]
+		valObj = db.Dict[args.Key]
 		zval := valObj.Value.(*table.ZSetType)
 		zval.Add(args.Score,args.Mem)
 	}
 
 
-	db.Dict[args.Key] = *valObj
+	db.Dict[args.Key] = valObj
 	fmt.Printf("ZAdd key %s Score %s Mem %s\n", args.Key,args.Score,args.Mem)
 	reply.Err = OK
 	return nil
 }
 
 func (db *RedisDB) SAdd(args *Args, reply *Reply) error {
-	var sval table.Set
-	var valObj *ValueObj
+	var sval *table.Set
+	var valObj ValueObj
 	if _, ok := db.Dict[args.Key]; !ok {
 		db.Mu.Lock()	//创建新键值对时才使用全局锁
 		defer db.Mu.Unlock()
 		//不存在存在
-		sval = *table.NewSet(args.Mems...)
+		sval = table.NewSet(args.Mems...)
 		//值对象
-		valObj := new(ValueObj)
+		valObj = *new(ValueObj)
 		valObj.Value = &sval
 		valObj.Datatype = 2
 	}else{
-		valObj := db.Dict[args.Key]
-		sval = valObj.Value.(table.Set)
+		valObj = db.Dict[args.Key]
+		sval = valObj.Value.(*table.Set)
 		sval.HsVal.Add(args.Mems...)
 	}
 
@@ -220,7 +220,7 @@ func (db *RedisDB) SAdd(args *Args, reply *Reply) error {
 	//}
 
 
-	db.Dict[args.Key] = *valObj
+	db.Dict[args.Key] = valObj
 	fmt.Printf("SAdd key %s Score %s Mem \n", args.Key)
 	fmt.Println(args.Mems)
 	reply.Err = OK
@@ -273,3 +273,50 @@ func (db *RedisDB) SMembers(args *Args, reply *Reply) error {
 	return nil
 }
 
+// list
+
+
+func (db *RedisDB) LPush(args *Args, reply *Reply) error {
+	var lval list.List
+	var valObj ValueObj
+	if _, ok := db.Dict[args.Key]; !ok {
+		db.Mu.Lock()	//创建新键值对时才使用全局锁
+		defer db.Mu.Unlock()
+		//不存在存在
+		lval = *list.New()
+		//值对象
+		valObj = *new(ValueObj)
+		valObj.Value = &lval
+		valObj.Datatype = 4
+	}else{
+		valObj = db.Dict[args.Key]
+		lval = valObj.Value.(list.List)
+	}
+	//将元素循环加入列表 头部
+	for _, item := range args.Mems{
+		lval.PushFront(item)
+	}
+	db.Dict[args.Key] = valObj
+	fmt.Printf("LPush key %s Mem \n", args.Key)
+	fmt.Println(args.Mems)
+	reply.Err = OK
+	return nil
+}
+
+func (db *RedisDB) LPop(args *Args, reply *Reply) error {
+	if _, ok := db.Dict[args.Key]; !ok {
+		reply.Value = ""
+	}else{
+		valObj := db.Dict[args.Key]
+		lval := valObj.Value.(*list.List)
+		reply.Value = ""
+		if(lval.Len()>0){
+			reply.Value = lval.Remove(lval.Front()).(string)
+		}
+	}
+
+	fmt.Printf("LPush key %s Mem \n", args.Key)
+	fmt.Println(args.Mems)
+	reply.Err = OK
+	return nil
+}
