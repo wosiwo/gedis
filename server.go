@@ -1,16 +1,26 @@
 package main
 
 import (
-	//"./protocol"
-	"./handle"
 	"fmt"
 	"net"
 	"strconv"
 	"strings"
-	"./table"
+	"./handle"
+	//"./table"
 )
 
+
+
+
+var rdServer handle.RedisServer
+var DBIndex int8
 func main() {
+	//数据库初始化
+	DBIndex = 0
+	rdServer.DBnum = 16
+	rdServer.DB = make([]handle.RedisDB,rdServer.DBnum)
+	rdServer.DB[DBIndex] = handle.RedisDB{}	//初始化
+	rdServer.DB[DBIndex].Dict = map[string]handle.ValueObj{}
 	var tcpAddr *net.TCPAddr
 
 	tcpAddr, _ = net.ResolveTCPAddr("tcp", "127.0.0.1:9999")
@@ -18,16 +28,7 @@ func main() {
 	tcpListener, _ := net.ListenTCP("tcp", tcpAddr)
 
 	defer tcpListener.Close()
-	kv := new(handle.KV)
-	kv.Data = map[string]string{}
-	ht := new(handle.HASHTB)
-	ht.Data = map[string]*handle.HASHTBVal{}
 
-	z := new(handle.ZSETAPI)
-	z.Data = map[string]*table.ZSetType{} //zset.New()
-
-	s := new(handle.SETAPI)
-	s.Data = map[string]*table.Set{}
 	for {
 		tcpConn, err := tcpListener.AcceptTCP()
 		if err != nil {
@@ -35,12 +36,12 @@ func main() {
 		}
 
 		fmt.Println("A client connected : " + tcpConn.RemoteAddr().String())
-		go tcpPipe(tcpConn,kv,ht,z,s,err)
+		go tcpPipe(tcpConn,err)
 	}
 
 }
 
-func tcpPipe(conn *net.TCPConn,kv *handle.KV,ht *handle.HASHTB,z *handle.ZSETAPI,s *handle.SETAPI,err error) {
+func tcpPipe(conn *net.TCPConn,err error) {
 	ipStr := conn.RemoteAddr().String()
 	defer func() {
 		fmt.Println("disconnected :" + ipStr)
@@ -52,7 +53,7 @@ func tcpPipe(conn *net.TCPConn,kv *handle.KV,ht *handle.HASHTB,z *handle.ZSETAPI
 	cmdstr := string(command[:n])
 	fmt.Println("cmdstr"+cmdstr)
 
-	reply := parseCmd(cmdstr,kv,ht,z,s)
+	reply := parseCmd(cmdstr)
 	//request := protocol.GetRequest(cmdstr)
 	//for {
 	//	message, err := reader.ReadString('\n')
@@ -67,7 +68,7 @@ func tcpPipe(conn *net.TCPConn,kv *handle.KV,ht *handle.HASHTB,z *handle.ZSETAPI
 	//}
 }
 
-func parseCmd(cmdStr string,kv *handle.KV,ht *handle.HASHTB,z *handle.ZSETAPI,s *handle.SETAPI) string {
+func parseCmd(cmdStr string) string {
 	cmdStrArr := strings.Split(cmdStr,"\r\n")
 
 	cmd := cmdStrArr[2]
@@ -78,58 +79,61 @@ func parseCmd(cmdStr string,kv *handle.KV,ht *handle.HASHTB,z *handle.ZSETAPI,s 
 	var replyVal string
 	//var reply handle.GetReply
 	key := cmdStrArr[4]
+
+	//获取当前数据库
+	db := rdServer.DB[DBIndex]
 	switch {
 		case cmd == "get"  && cmdLen>=6:
-			var reqArgs handle.GetArgs
-			var reply handle.GetReply
+			var reqArgs handle.Args
+			var reply handle.Reply
 			reqArgs.Key = key
-			handle.Get(kv, &reqArgs,&reply)
+			db.Get(&reqArgs,&reply)
 			replyVal = reply.Value
 		case cmd == "set" && cmdLen>=8 :
-			var reqArgs handle.PutArgs
-			var reply handle.PutReply
+			var reqArgs handle.Args
+			var reply handle.Reply
 			reqArgs.Key = key
 			reqArgs.Value = cmdStrArr[6]
-			handle.Put(kv, &reqArgs,&reply)
+			db.Put(&reqArgs,&reply)
 			fmt.Println("tt")
 			replyVal = "+OK"
 			fmt.Println(reply.Value)
 
 	case cmd == "hget"  && cmdLen>=8 :
-			var reqArgs handle.HGetArgs
-			var reply handle.HGetReply
+			var reqArgs handle.Args
+			var reply handle.Reply
 			reqArgs.Key = key
 			reqArgs.Field = cmdStrArr[6]
-			handle.HGet(ht, &reqArgs,&reply)
+			db.HGet(&reqArgs,&reply)
 			replyVal = reply.Value
 
 	case cmd == "hset"  && cmdLen>=10 :
-			var reqArgs handle.HSetArgs
-			var reply handle.HSetReply
+			var reqArgs handle.Args
+			var reply handle.Reply
 			reqArgs.Key = key
 			reqArgs.Field = cmdStrArr[6]
 			reqArgs.Value = cmdStrArr[8]
-			handle.HSet(ht, &reqArgs,&reply)
+			db.HSet(&reqArgs,&reply)
 			replyVal = "+OK"
 		case cmd == "zadd"  && cmdLen>=10:
-			var reqArgs handle.ZAddArgs
-			var reply handle.ZAddReply
+			var reqArgs handle.Args
+			var reply handle.Reply
 			reqArgs.Key = key
-			reqArgs.Mem = cmdStrArr[6]
-			i, err := strconv.ParseFloat(cmdStrArr[8], 64)
+			reqArgs.Mem = cmdStrArr[8]
+			i, err := strconv.ParseFloat(cmdStrArr[6], 64)
 			replyVal = "+Error"
 			if err == nil {
 				reqArgs.Score = i
-				handle.ZAdd(z, &reqArgs,&reply)
+				db.ZAdd(&reqArgs,&reply)
 				replyVal = "+OK"
 			}
 		case cmd == "zscore"  && cmdLen>=8:
-			var reqArgs handle.ZScoreArgs
-			var reply handle.ZScoreReply
+			var reqArgs handle.Args
+			var reply handle.Reply
 			reqArgs.Key = key
 			reqArgs.Mem = cmdStrArr[6]
-			handle.ZScore(z, &reqArgs,&reply)
-			replyVal = strconv.FormatFloat(reply.Value, 'f', 6, 64)
+			db.ZScore(&reqArgs,&reply)
+			replyVal = reply.Value
 		case cmd == "sadd" && cmdLen>=8:
 			var reqArgs handle.Args
 			var reply handle.Reply
@@ -137,19 +141,19 @@ func parseCmd(cmdStr string,kv *handle.KV,ht *handle.HASHTB,z *handle.ZSETAPI,s 
 			//TODO 支持多个元素
 			reqArgs.Mems = append(reqArgs.Mems,cmdStrArr[6])
 			reqArgs.Mems = append(reqArgs.Mems,cmdStrArr[8])
-			handle.SAdd(s, &reqArgs,&reply)
+			db.SAdd(&reqArgs,&reply)
 			replyVal = "+OK"
 		case cmd == "scard" && cmdLen>=6:
 			var reqArgs handle.Args
 			var reply handle.Reply
 			reqArgs.Key = key
-			handle.SCard(s, &reqArgs,&reply)
+			db.SCard(&reqArgs,&reply)
 			replyVal = reply.Value
 		case cmd == "smembers" && cmdLen>=6:
 			var reqArgs handle.Args
 			var reply handle.Reply
 			reqArgs.Key = key
-			handle.SMembers(s, &reqArgs,&reply)
+			db.SMembers(&reqArgs,&reply)
 			replyVal = reply.Value
 
 	default:
