@@ -1,11 +1,14 @@
 package main
 
+import "C"
 import (
 	"fmt"
 	"net"
 	"strconv"
 	"strings"
 	"./handle"
+	"time"
+
 	//"./table"
 )
 
@@ -14,6 +17,9 @@ import (
 
 var rdServer handle.RedisServer
 var DBIndex int8
+
+// 用来记录所有的客户端连接
+//var ConnMap map[string]*net.TCPConn
 func main() {
 	//数据库初始化
 	DBIndex = 0
@@ -22,6 +28,7 @@ func main() {
 	rdServer.DB[DBIndex] = handle.RedisDB{}	//初始化
 	rdServer.DB[DBIndex].Dict = map[string]handle.ValueObj{}
 	var tcpAddr *net.TCPAddr
+	//ConnMap = make(map[string]*net.TCPConn)
 
 	tcpAddr, _ = net.ResolveTCPAddr("tcp", "127.0.0.1:9999")
 
@@ -36,36 +43,73 @@ func main() {
 		}
 
 		fmt.Println("A client connected : " + tcpConn.RemoteAddr().String())
-		go tcpPipe(tcpConn,err)
+		// 新连接加入map
+		//ConnMap[tcpConn.RemoteAddr().String()] = tcpConn
+		go handleConnection(tcpConn,err)
 	}
 
 }
 
-func tcpPipe(conn *net.TCPConn,err error) {
+/**
+	处理连接
+ */
+func handleConnection(conn *net.TCPConn,err error) {
+	Log("handleConnection")
+	Log(conn)
 	ipStr := conn.RemoteAddr().String()
-	defer func() {
+	defer func(){
 		fmt.Println("disconnected :" + ipStr)
 		conn.Close()
 	}()
-	//reader := bufio.NewReader(conn)
-	command := make([]byte, 1024)
-	n, err := conn.Read(command)
-	cmdstr := string(command[:n])
-	fmt.Println("cmdstr"+cmdstr)
+	buffer := make([]byte, 1024)
+	for {
+		n, err := conn.Read(buffer)
+		if err != nil {
+			Log(conn.RemoteAddr().String(), " Fatal error: ", err)
+			return
+		}
+		//解析请求执行相关读写操作
+		cmdstr := string(buffer[:n])
+		fmt.Println("cmdstr"+cmdstr)
 
-	reply := parseCmd(cmdstr)
-	//request := protocol.GetRequest(cmdstr)
-	//for {
-	//	message, err := reader.ReadString('\n')
-	//	if err != nil {
-	//		return
-	//	}
-	//
-	//	fmt.Println(string(message))
-	//	msg := time.Now().String() + "\n"
-	b := []byte(reply)
-	conn.Write(b)
-	//}
+		reply := parseCmd(cmdstr)
+		b := []byte(reply)
+		conn.Write(b)
+		fmt.Println("reply "+reply)
+		if("+Error" == reply){
+			return
+		}
+
+		//心跳计时
+		Data := buffer[:n]
+		message := make(chan byte)
+		go HeartBeating(conn, message, 30)
+		// 检测每次是否有数据传入
+		go GravelChannel(Data, message)
+		Log(time.Now().Format("2006-01-02 15:04:05.0000000"), conn.RemoteAddr().String(), string(buffer[:n]))
+	}
+
+}
+func GravelChannel(bytes []byte, mess chan byte) {
+	for _, v := range bytes {
+		mess <- v
+	}
+	close(mess)
+}
+func HeartBeating(conn net.Conn, bytes chan byte, timeout int) {
+	select {
+	case fk := <-bytes:
+		Log(conn.RemoteAddr().String(), "心跳:第", string(fk), "times")
+		conn.SetDeadline(time.Now().Add(time.Duration(timeout) * time.Second))
+		break
+	case <-time.After(5 * time.Second):
+		Log("conn dead now")
+		conn.Close()
+	}
+}
+func Log(v ...interface{}) {
+	fmt.Println(v...)
+	return
 }
 
 func parseCmd(cmdStr string) string {
@@ -73,6 +117,9 @@ func parseCmd(cmdStr string) string {
 
 	cmd := cmdStrArr[2]
 	cmdLen := len(cmdStrArr)
+	if(cmdLen<=4){
+		return "+Error"
+	}
 	fmt.Println("cmdLen %d",cmdLen)
 	cmd = strings.ToLower(cmd)
 	fmt.Println("cmd "+cmd)
