@@ -320,3 +320,19 @@ func (db *RedisDB) LPop(args *Args, reply *Reply) error {
 	reply.Err = OK
 	return nil
 }
+
+
+
+func (db *RedisDB) Delete(args *Args, reply *Reply) error {
+	if _, ok := db.Dict[args.Key]; !ok {
+		reply.Value = "+OK"
+	}else{
+		delete(db.Dict,args.Key)
+		reply.Value = "+OK"
+	}
+
+	fmt.Printf("Delete key %s  \n", args.Key)
+	reply.Err = OK
+	return nil
+}
+

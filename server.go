@@ -72,7 +72,7 @@ func handleConnection(conn *net.TCPConn,err error) {
 		cmdstr := string(buffer[:n])
 		fmt.Println("cmdstr"+cmdstr)
 
-		reply := parseCmd(cmdstr)
+		reply := handleRequest(cmdstr)
 		b := []byte(reply)
 		conn.Write(b)
 		fmt.Println("reply "+reply)
@@ -112,7 +112,7 @@ func Log(v ...interface{}) {
 	return
 }
 
-func parseCmd(cmdStr string) string {
+func handleRequest(cmdStr string) string {
 	cmdStrArr := strings.Split(cmdStr,"\r\n")
 
 	cmd := cmdStrArr[2]
@@ -217,6 +217,12 @@ func parseCmd(cmdStr string) string {
 			var reply handle.Reply
 			reqArgs.Key = key
 			db.LPop(&reqArgs,&reply)
+			replyVal = reply.Value
+		case cmd == "del" && cmdLen>=6:
+			var reqArgs handle.Args
+			var reply handle.Reply
+			reqArgs.Key = key
+			db.Delete(&reqArgs,&reply)
 			replyVal = reply.Value
 
 	default:
