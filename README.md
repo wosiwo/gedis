@@ -27,6 +27,7 @@ a slimple demo that use go to realize redis like nosql
 * 使用纯go实现的跳跃表
 * 支持set数据类型
 * 支持list数据类型
+* 支持长连接
 > 引用代码
 * [https://github.com/chaozh/MIT-6.824/issues/3)
 * [https://github.com/Skycrab/cham/tree/master/lib/zset)
