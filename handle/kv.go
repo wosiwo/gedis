@@ -204,7 +204,7 @@ func (db *RedisDB) SAdd(args *Args, reply *Reply) error {
 		sval = table.NewSet(args.Mems...)
 		//值对象
 		valObj = *new(ValueObj)
-		valObj.Value = &sval
+		valObj.Value = sval
 		valObj.Datatype = 2
 	}else{
 		valObj = db.Dict[args.Key]
@@ -277,20 +277,20 @@ func (db *RedisDB) SMembers(args *Args, reply *Reply) error {
 
 
 func (db *RedisDB) LPush(args *Args, reply *Reply) error {
-	var lval list.List
+	var lval *list.List
 	var valObj ValueObj
 	if _, ok := db.Dict[args.Key]; !ok {
 		db.Mu.Lock()	//创建新键值对时才使用全局锁
 		defer db.Mu.Unlock()
 		//不存在存在
-		lval = *list.New()
+		lval = list.New()
 		//值对象
 		valObj = *new(ValueObj)
-		valObj.Value = &lval
+		valObj.Value = lval
 		valObj.Datatype = 4
 	}else{
 		valObj = db.Dict[args.Key]
-		lval = valObj.Value.(list.List)
+		lval = valObj.Value.(*list.List)
 	}
 	//将元素循环加入列表 头部
 	for _, item := range args.Mems{
