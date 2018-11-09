@@ -14,13 +14,13 @@ a slimple demo that use go to realize redis like nosql
   ```
 ### TODO
 * 实现redis中db的数据结构
-* 支持set数据类型
 * 支持持久化
 * 支持事务ACID特性
 * 性能优化
 ### DONE
 * 支持redis通信协议
 * 使用纯go实现跳跃表
+* 支持set数据类型
 > 引用代码
 * [https://github.com/chaozh/MIT-6.824/issues/3)
 * [https://github.com/Skycrab/cham/tree/master/lib/zset)

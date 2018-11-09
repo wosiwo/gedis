@@ -92,15 +92,15 @@ func (s *HashSet) Empty() bool {
 	defer s.Unlock()
 	return len(s.Val) == 0
 }
-
-// 获取元素列表（无序）
-func (s *HashSet) List() []int {
+//
+// 获取元素列表
+func (s *HashSet) SMembers() string {
 	s.RLock()
 	defer s.RUnlock()
-	//TODO 遍历map元素
-	list := make(map[string]bool)
+	list := ""
+	//TODO 每个元素输出一行
 	for item := range s.Val {
-		list = append(list, item)
+		list += " "+item
 	}
 	return list
 }

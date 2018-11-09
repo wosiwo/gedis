@@ -2,6 +2,8 @@ package handle
 
 import (
 	"../table"
+	"strconv"
+
 	//"bufio"
 	"fmt"
 	"sync"
@@ -23,6 +25,13 @@ type Err string
 type PutArgs struct {
 	Key   string
 	Value string
+}
+
+
+type Args struct {
+	Key string
+	Mem string
+	Mems[] string
 }
 
 type Reply struct {
@@ -105,6 +114,12 @@ type ZSETAPI struct {
 	Mu   sync.Mutex
 	Data map[string]*table.ZSetType
 }
+
+type SETAPI struct {
+	Mu   sync.Mutex
+	Data map[string]*table.Set
+}
+
 //
 //func server() {
 //	rpcs := rpc.NewServer()
@@ -235,6 +250,79 @@ func ZAdd(z *ZSETAPI, args *ZAddArgs, reply *ZAddReply) error {
 	zval.Add(args.Score,args.Mem)
 	z.Data[args.Key] = zval
 	fmt.Printf("ZAdd key %s Score %s Mem %s\n", args.Key,args.Score,args.Mem)
+	reply.Err = OK
+	return nil
+}
+
+func SAdd(s *SETAPI, args *Args, reply *Reply) error {
+	s.Mu.Lock()
+	defer s.Mu.Unlock()
+	var sval table.Set
+	if _, ok := s.Data[args.Key]; !ok {
+		//不存在存在
+		sval = *table.NewSet(args.Mems...)
+	}else{
+		sval = *s.Data[args.Key]
+		sval.HsVal.Add(args.Mems...)
+	}
+
+	//TODO 判断是否使用整数集合
+	//if(sval.EncodeType == 0){
+	//	sval.IntVal.Add(args.Mems...)
+	//}else{
+	//	sval.HsVal.Add(args.Mems...)
+	//}
+	s.Data[args.Key] = &sval
+	fmt.Printf("SAdd key %s Score %s Mem \n", args.Key)
+	fmt.Println(args.Mems)
+	reply.Err = OK
+	return nil
+}
+
+func SCard(s *SETAPI, args *Args, reply *Reply) error {
+	s.Mu.Lock()
+	defer s.Mu.Unlock()
+	var sval table.Set
+	if _, ok := s.Data[args.Key]; !ok {
+		//不存在存在
+		reply.Value = "0"
+	}else{
+		sval = *s.Data[args.Key]
+		count := sval.HsVal.Count()
+		reply.Value = strconv.FormatInt(int64(count),10)
+	}
+
+	//TODO 判断是否使用整数集合
+	//if(sval.EncodeType == 0){
+	//	sval.IntVal.Add(args.Mems...)
+	//}else{
+	//	sval.HsVal.Add(args.Mems...)
+	//}
+	fmt.Printf("SCard key %s Count %s  \n", args.Key,reply.Value)
+	fmt.Println(args.Mems)
+	reply.Err = OK
+	return nil
+}
+func SMembers(s *SETAPI, args *Args, reply *Reply) error {
+	s.Mu.Lock()
+	defer s.Mu.Unlock()
+	var sval table.Set
+	if _, ok := s.Data[args.Key]; !ok {
+		//不存在存在
+		reply.Value = ""
+	}else{
+		sval = *s.Data[args.Key]
+		reply.Value = sval.HsVal.SMembers()
+	}
+
+	//TODO 判断是否使用整数集合
+	//if(sval.EncodeType == 0){
+	//	sval.IntVal.Add(args.Mems...)
+	//}else{
+	//	sval.HsVal.Add(args.Mems...)
+	//}
+	fmt.Printf("SMembers key %s Value %s  \n", args.Key,reply.Value)
+	fmt.Println(args.Mems)
 	reply.Err = OK
 	return nil
 }
