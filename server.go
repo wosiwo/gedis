@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net"
+	"os"
 	"strconv"
 	"strings"
 	"./handle"
@@ -14,9 +15,24 @@ import (
 
 var rdServer handle.RedisServer
 var DBIndex int8
+
+func handleArg(){
+	//处理命令行参数
+	argv := os.Args
+	argc := len(os.Args)
+	if argc>2 {
+		if argv[1] == "--v" || argv[1] == "-V" {
+			fmt.Println("Gedis server v=1.3.0 bits=64")		//输出版本号
+			os.Exit(0)
+		}
+	}
+}
 func main() {
+	//处理命令行参数
+	handleArg()
 	//数据库初始化
 	DBIndex = 0
+	rdServer.Pid = os.Getpid()
 	rdServer.DBnum = 16
 	rdServer.DB = make([]handle.RedisDB,rdServer.DBnum)
 	rdServer.DB[DBIndex] = handle.RedisDB{}	//初始化

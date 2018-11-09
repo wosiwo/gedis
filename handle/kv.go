@@ -37,6 +37,7 @@ type RedisDB struct {
 
 type RedisServer struct {
 	DBnum   int8
+	Pid     int
 	DB[] RedisDB
 }
 
