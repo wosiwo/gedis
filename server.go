@@ -11,7 +11,7 @@ import (
 	"./core/config"
 )
 
-var rdServer handle.RedisServer
+var rdServer =  new(handle.RedisServer)
 var DBIndex int8
 var confPath = "./conf/server.conf"
 
