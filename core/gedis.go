@@ -287,6 +287,10 @@ func (s *GedisServer) ZAdd(c *GdClient)  {
 		valObj.Datatype = 3
 	}else{
 		valObj = db.Dict[c.Key]
+		if valObj.Datatype != 3 {	//判断键的类型
+			addReplyBulk(c,"key exists but not zset")
+			return
+		}
 		zval := valObj.Value.(*table.ZSetType)
 		zval.Add(Score,Mem)
 	}

@@ -10,7 +10,7 @@ a slimple demo that use go to realize redis like nosql
   ```
 * 客户端直接使用redis-cli
   ```
-  redis-cli -p 9999
+  redis-cli -p 9997
   ```
 ### TODO
 * 时间任务，清理过期key
@@ -20,7 +20,7 @@ a slimple demo that use go to realize redis like nosql
 * 支持事务ACID特性
 * 性能优化
 * 使用协程的情况下，处理并发冲突
-
+* 操作已存在key时，先判断类型
 ### DONE
 * 统一db的存储结构
 * 支持redis通信协议
@@ -28,9 +28,11 @@ a slimple demo that use go to realize redis like nosql
 * 支持set数据类型
 * 支持list数据类型
 * 默认配置启动
+* 代码结构整理
 > 引用代码
 * [https://github.com/chaozh/MIT-6.824/issues/3)
 * [https://github.com/Skycrab/cham/tree/master/lib/zset)
 * [https://github.com/xcltapestry/xclpkg/tree/master/algorithm)
-
+> 参考了redis源码与godis项目
+* [https://github.com/alphali/godis]
 
