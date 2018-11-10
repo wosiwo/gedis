@@ -1,7 +1,7 @@
 package main
 
 import (
-	"./handle"
+	"./core"
 	"fmt"
 	"net"
 	"os"
@@ -9,11 +9,11 @@ import (
 	"./core/config"
 )
 
-var gdServer =  new(handle.GedisServer)
+var gdServer =  new(core.GedisServer)
 var DBIndex int8
 var confPath = "./conf/server.conf"
 
-func handleArg() {
+func coreArg() {
 	//处理命令行参数
 	argv := os.Args
 	argc := len(os.Args)
@@ -26,7 +26,7 @@ func handleArg() {
 }
 func main() {
 	//处理命令行参数
-	handleArg()
+	coreArg()
 	//读取配置
 	conf, err := config.NewConfig(confPath)
 	if err != nil {
@@ -37,7 +37,7 @@ func main() {
 	DBIndex = 0
 	gdServer.DBnum = 16
 	gdServer.Pid = os.Getpid()
-	//gdServer.Commands = map[string]*handle.GedisCommand{}	//命令数组
+	//gdServer.Commands = map[string]*core.GedisCommand{}	//命令数组
 	initDB(gdServer)
 	//初始化命令哈希表
 	initCommand(gdServer)
@@ -91,30 +91,48 @@ func tcpPipe(conn *net.TCPConn, err error) {
 
 
 
-func initDB(gdServer *handle.GedisServer){
-	gdServer.DB = make([]handle.GedisDB, gdServer.DBnum)
+func initDB(gdServer *core.GedisServer){
+	gdServer.DB = make([]core.GedisDB, gdServer.DBnum)
 	for i := 0; i < gdServer.DBnum; i++ {
-		gdServer.DB[i] = handle.GedisDB{} //初始化
-		gdServer.DB[i].Dict = map[string]handle.ValueObj{}
+		gdServer.DB[i] = core.GedisDB{} //初始化
+		gdServer.DB[i].Dict = map[string]core.ValueObj{}
 	}
 }
 
 
 
-func initCommand(gdServer *handle.GedisServer){
-	getCommand := &handle.GedisCommand{Name: "get", Proc: gdServer.Get}
-	setCommand := &handle.GedisCommand{Name: "get", Proc: gdServer.Set}
-	//setCommand := &handle.GedisCommand{Name: "set", Proc: gdServer.Set}
+func initCommand(gdServer *core.GedisServer){
+	getCommand := &core.GedisCommand{Name: "get", Proc: gdServer.Get}
+	setCommand := &core.GedisCommand{Name: "get", Proc: gdServer.Set}
+	hgetCommand := &core.GedisCommand{Name: "get", Proc: gdServer.HGet}
+	hsetCommand := &core.GedisCommand{Name: "hset", Proc: gdServer.HSet}
+	zaddCommand := &core.GedisCommand{Name: "zadd", Proc: gdServer.ZAdd}
+	zscoreCommand := &core.GedisCommand{Name: "zscore", Proc: gdServer.ZScore}
+	saddCommand := &core.GedisCommand{Name: "sadd", Proc: gdServer.SAdd}
+	scardCommand := &core.GedisCommand{Name: "scard", Proc: gdServer.SCard}
+	smembersCommand := &core.GedisCommand{Name: "smembers", Proc: gdServer.SMembers}
+	lpushCommand := &core.GedisCommand{Name: "lpush", Proc: gdServer.LPush}
+	lpopCommand := &core.GedisCommand{Name: "lpop", Proc: gdServer.LPop}
 
-	gdServer.Commands = map[string]*handle.GedisCommand{
+	gdServer.Commands = map[string]*core.GedisCommand{
 		"get" : getCommand,
 		"set" : setCommand,
+		"hget" : hgetCommand,
+		"hset" : hsetCommand,
+		"zadd" : zaddCommand,
+		"zscore" : zscoreCommand,
+		"sadd" : saddCommand,
+		"scard" : scardCommand,
+		"smembers" : smembersCommand,
+		"lpush" : lpushCommand,
+		"lpop" : lpopCommand,
+
 	}
 }
 
 
 // 负责传送命令回复的写处理器
-func SendReplyToClient(conn net.Conn, c *handle.GdClient) {
+func SendReplyToClient(conn net.Conn, c *core.GdClient) {
 	len := len(c.Buf)
 	fmt.Println(c.Buf)
 	rep := fmt.Sprintf("$%d\r\n%s\r\n", len, c.Buf)
@@ -122,120 +140,3 @@ func SendReplyToClient(conn net.Conn, c *handle.GdClient) {
 
 	conn.Write([]byte(rep))
 }
-//
-//
-//func parseCmd(cmdStr string) string {
-//	cmdStrArr := strings.Split(cmdStr, "\r\n")
-//
-//	cmd := cmdStrArr[2]
-//	cmdLen := len(cmdStrArr)
-//	fmt.Println("cmdLen %d", cmdLen)
-//	cmd = strings.ToLower(cmd)
-//	fmt.Println("cmd " + cmd)
-//	var replyVal string
-//	//var reply handle.GetReply
-//	key := cmdStrArr[4]
-//
-//	//获取当前数据库
-//	db := gdServer.DB[DBIndex]
-//	switch {
-//	case cmd == "get" && cmdLen >= 6:
-//		var reqArgs handle.Args
-//		var reply handle.Reply
-//		reqArgs.Key = key
-//		db.Get(&reqArgs, &reply)
-//		replyVal = reply.Value
-//	case cmd == "set" && cmdLen >= 8:
-//		var reqArgs handle.Args
-//		var reply handle.Reply
-//		reqArgs.Key = key
-//		reqArgs.Value = cmdStrArr[6]
-//		db.Set(&reqArgs, &reply)
-//		fmt.Println("tt")
-//		replyVal = "+OK"
-//		fmt.Println(reply.Value)
-//
-//	case cmd == "hget" && cmdLen >= 8:
-//		var reqArgs handle.Args
-//		var reply handle.Reply
-//		reqArgs.Key = key
-//		reqArgs.Field = cmdStrArr[6]
-//		db.HGet(&reqArgs, &reply)
-//		replyVal = reply.Value
-//
-//	case cmd == "hset" && cmdLen >= 10:
-//		var reqArgs handle.Args
-//		var reply handle.Reply
-//		reqArgs.Key = key
-//		reqArgs.Field = cmdStrArr[6]
-//		reqArgs.Value = cmdStrArr[8]
-//		db.HSet(&reqArgs, &reply)
-//		replyVal = "+OK"
-//	case cmd == "zadd" && cmdLen >= 10:
-//		var reqArgs handle.Args
-//		var reply handle.Reply
-//		reqArgs.Key = key
-//		reqArgs.Mem = cmdStrArr[8]
-//		i, err := strconv.ParseFloat(cmdStrArr[6], 64)
-//		replyVal = "+Error"
-//		if err == nil {
-//			reqArgs.Score = i
-//			db.ZAdd(&reqArgs, &reply)
-//			replyVal = "+OK"
-//		}
-//	case cmd == "zscore" && cmdLen >= 8:
-//		var reqArgs handle.Args
-//		var reply handle.Reply
-//		reqArgs.Key = key
-//		reqArgs.Mem = cmdStrArr[6]
-//		db.ZScore(&reqArgs, &reply)
-//		replyVal = reply.Value
-//	case cmd == "sadd" && cmdLen >= 8:
-//		var reqArgs handle.Args
-//		var reply handle.Reply
-//		reqArgs.Key = key
-//		//TODO 支持多个元素
-//		reqArgs.Mems = append(reqArgs.Mems, cmdStrArr[6])
-//		reqArgs.Mems = append(reqArgs.Mems, cmdStrArr[8])
-//		db.SAdd(&reqArgs, &reply)
-//		replyVal = "+OK"
-//	case cmd == "scard" && cmdLen >= 6:
-//		var reqArgs handle.Args
-//		var reply handle.Reply
-//		reqArgs.Key = key
-//		db.SCard(&reqArgs, &reply)
-//		replyVal = reply.Value
-//	case cmd == "smembers" && cmdLen >= 6:
-//		var reqArgs handle.Args
-//		var reply handle.Reply
-//		reqArgs.Key = key
-//		db.SMembers(&reqArgs, &reply)
-//		replyVal = reply.Value
-//	case cmd == "lpush" && cmdLen >= 10:
-//		var reqArgs handle.Args
-//		var reply handle.Reply
-//		reqArgs.Key = key
-//		//TODO 支持多个元素
-//		reqArgs.Mems = append(reqArgs.Mems, cmdStrArr[6])
-//		reqArgs.Mems = append(reqArgs.Mems, cmdStrArr[8])
-//
-//		db.LPush(&reqArgs, &reply)
-//		replyVal = "+OK"
-//	case cmd == "lpop" && cmdLen >= 6:
-//		var reqArgs handle.Args
-//		var reply handle.Reply
-//		reqArgs.Key = key
-//		db.LPop(&reqArgs, &reply)
-//		replyVal = reply.Value
-//
-//	default:
-//		//var reply handle.GetReply
-//		replyVal = "+Error"
-//	}
-//	len := len(replyVal)
-//	fmt.Println(replyVal)
-//	rep := fmt.Sprintf("$%d\r\n%s\r\n", len, replyVal)
-//	fmt.Println("replyVal " + replyVal)
-//	return rep
-//
-//}

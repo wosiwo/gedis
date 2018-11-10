@@ -1,4 +1,4 @@
-package handle
+package core
 
 import (
 	"../table"
@@ -199,29 +199,32 @@ func (s *GedisServer) Set(c *GdClient)  {
 	//return nil
 }
 //HASH
-func (db *GedisDB) HGet(args *Args, reply *Reply) error {
-	hsObj, ok := db.Dict[args.Key]
+func (s *GedisServer) HGet(c *GdClient)  {
+	db := &s.DB[c.DBId]
+	hsObj, ok := db.Dict[c.Key]
 	var  val string
+	Field := c.Argv[6]
 	if(ok){
 		hsval := hsObj.Value.(*HASHTBVal)
-		val, ok = hsval.Data[args.Field]
+		val, ok = hsval.Data[Field]
 	}
-	fmt.Printf("HGet key %s Field %s \n", args.Key,args.Field)
+	fmt.Printf("HGet key %s Field %s \n", c.Key,Field)
 	fmt.Printf("HGet val %s\n", val)
 
 	if ok {
-		reply.Err = OK
-		reply.Value = val
+		addReplyBulk(c,val)
 	} else {
-		reply.Err = ErrNoKey
-		reply.Value = ""
+		addReplyBulk(c,"")
 	}
-	return nil
+	//return nil
 }
 
-func (db *GedisDB) HSet(args *Args, reply *Reply) error {
+func (s *GedisServer) HSet(c *GdClient)  {
 	var valObj ValueObj
-	if _, ok := db.Dict[args.Key]; !ok {
+	db := &s.DB[c.DBId]
+	Field := c.Argv[6]
+	Value := c.Argv[8]
+	if _, ok := db.Dict[c.Key]; !ok {
 		db.Mu.Lock()	//创建新键值对时才使用全局锁
 		defer db.Mu.Unlock()
 
@@ -231,85 +234,90 @@ func (db *GedisDB) HSet(args *Args, reply *Reply) error {
 
 
 		hsval.Data = make(map[string]string)
-		hsval.Data[args.Field] = args.Value
+		hsval.Data[Field] = Value
 		valObj.Value = hsval
 	}else{
-		valObj = db.Dict[args.Key]
+		valObj = db.Dict[c.Key]
 		hsval := valObj.Value.(*HASHTBVal)
-		hsval.Data[args.Field] = args.Value
+		hsval.Data[Field] = Value
 	}
 
 
-	db.Dict[args.Key] = valObj
+	db.Dict[c.Key] = valObj
 
-	fmt.Printf("HSet key %s Field %s Value %s\n", args.Key,args.Field,args.Value)
-	reply.Err = OK
-	return nil
+	fmt.Printf("HSet key %s Field %s Value %s\n", c.Key,Field,Value)
+	addReplyBulk(c,"+OK")
 }
 //zset
 
-func (db *GedisDB) ZScore(args *Args, reply *Reply) error {
-	valObj := db.Dict[args.Key]
+func (s *GedisServer) ZScore(c *GdClient)  {
+	db := &s.DB[c.DBId]
+	valObj := db.Dict[c.Key]
 	zval, ok := valObj.Value.(*table.ZSetType)
+	Mem := c.Argv[6]
 	var  val float64
 	if(ok){
-		val, ok = zval.Score(args.Mem)
+		val, ok = zval.Score(Mem)
 	}
-	fmt.Printf("HGet key %s Field %s \n", args.Key,args.Mem)
+	fmt.Printf("HGet key %s Field %s \n", c.Key,Mem)
 	fmt.Printf("HGet val %s\n", val)
 
 	if ok {
-		reply.Err = OK
-		reply.Value = strconv.FormatInt(int64(val),10)
+		addReplyBulk(c,strconv.FormatInt(int64(val),10))
 	} else {
-		reply.Err = ErrNoKey
-		reply.Value = "0"
+		addReplyBulk(c,"0")
 	}
-	return nil
 }
 
-func (db *GedisDB) ZAdd(args *Args, reply *Reply) error {
+func (s *GedisServer) ZAdd(c *GdClient)  {
 	var valObj ValueObj
-	if _, ok := db.Dict[args.Key]; !ok {
+	db := &s.DB[c.DBId]
+	Score, _ := strconv.ParseFloat(c.Argv[6], 64)
+	Mem := c.Argv[8]
+	if _, ok := db.Dict[c.Key]; !ok {
 		db.Mu.Lock()	//创建新键值对时才使用全局锁
 		defer db.Mu.Unlock()
 
 		zval := table.New()
-		zval.Add(args.Score,args.Mem)
+		zval.Add(Score,Mem)
 
 		//值对象
 		valObj = *new(ValueObj)
 		valObj.Value = zval
 		valObj.Datatype = 3
 	}else{
-		valObj = db.Dict[args.Key]
+		valObj = db.Dict[c.Key]
 		zval := valObj.Value.(*table.ZSetType)
-		zval.Add(args.Score,args.Mem)
+		zval.Add(Score,Mem)
 	}
 
 
-	db.Dict[args.Key] = valObj
-	fmt.Printf("ZAdd key %s Score %s Mem %s\n", args.Key,args.Score,args.Mem)
-	reply.Err = OK
-	return nil
+	db.Dict[c.Key] = valObj
+	fmt.Printf("ZAdd key %s Score %s Mem %s\n", c.Key,Score,Mem)
+	addReplyBulk(c,"+OK")
 }
 
-func (db *GedisDB) SAdd(args *Args, reply *Reply) error {
+func (s *GedisServer) SAdd(c *GdClient)  {
 	var sval *table.Set
 	var valObj ValueObj
-	if _, ok := db.Dict[args.Key]; !ok {
+	db := &s.DB[c.DBId]
+	var Mems []string
+	//TODO 支持多个元素
+	Mems = append(Mems, c.Argv[6])
+	Mems = append(Mems, c.Argv[8])
+	if _, ok := db.Dict[c.Key]; !ok {
 		db.Mu.Lock()	//创建新键值对时才使用全局锁
 		defer db.Mu.Unlock()
 		//不存在存在
-		sval = table.NewSet(args.Mems...)
+		sval = table.NewSet(Mems...)
 		//值对象
 		valObj = *new(ValueObj)
 		valObj.Value = &sval
 		valObj.Datatype = 2
 	}else{
-		valObj = db.Dict[args.Key]
+		valObj = db.Dict[c.Key]
 		sval = valObj.Value.(*table.Set)
-		sval.HsVal.Add(args.Mems...)
+		sval.HsVal.Add(Mems...)
 	}
 
 	//TODO 判断是否使用整数集合
@@ -320,23 +328,25 @@ func (db *GedisDB) SAdd(args *Args, reply *Reply) error {
 	//}
 
 
-	db.Dict[args.Key] = valObj
-	fmt.Printf("SAdd key %s Score %s Mem \n", args.Key)
-	fmt.Println(args.Mems)
-	reply.Err = OK
-	return nil
+	db.Dict[c.Key] = valObj
+	fmt.Printf("SAdd key %s Score %s Mem \n", c.Key)
+	fmt.Println(Mems)
+	addReplyBulk(c,"+OK")
+
 }
 
-func (db *GedisDB) SCard(args *Args, reply *Reply) error {
+func (s *GedisServer) SCard(c *GdClient)  {
 	var sval *table.Set
-	if _, ok := db.Dict[args.Key]; !ok {
+	db := &s.DB[c.DBId]
+	var Value string
+	if _, ok := db.Dict[c.Key]; !ok {
 		//不存在存在
-		reply.Value = "0"
+		Value = "0"
 	}else{
-		valObj := db.Dict[args.Key]
+		valObj := db.Dict[c.Key]
 		sval = valObj.Value.(*table.Set)
 		count := sval.HsVal.Count()
-		reply.Value = strconv.FormatInt(int64(count),10)
+		Value = strconv.FormatInt(int64(count),10)
 	}
 
 	//TODO 判断是否使用整数集合
@@ -345,20 +355,20 @@ func (db *GedisDB) SCard(args *Args, reply *Reply) error {
 	//}else{
 	//	sval.HsVal.Add(args.Mems...)
 	//}
-	fmt.Printf("SCard key %s Count %s  \n", args.Key,reply.Value)
-	fmt.Println(args.Mems)
-	reply.Err = OK
-	return nil
+	fmt.Printf("SCard key %s Count %s  \n", c.Key,Value)
+	addReplyBulk(c,Value)
 }
-func (db *GedisDB) SMembers(args *Args, reply *Reply) error {
+func (s *GedisServer) SMembers(c *GdClient)  {
 	var sval *table.Set
-	if _, ok := db.Dict[args.Key]; !ok {
+	db := &s.DB[c.DBId]
+	var Value string
+	if _, ok := db.Dict[c.Key]; !ok {
 		//不存在存在
-		reply.Value = ""
+		Value = ""
 	}else{
-		valObj := db.Dict[args.Key]
+		valObj := db.Dict[c.Key]
 		sval = valObj.Value.(*table.Set)
-		reply.Value = sval.HsVal.SMembers()
+		Value = sval.HsVal.SMembers()
 	}
 
 	//TODO 判断是否使用整数集合
@@ -367,19 +377,22 @@ func (db *GedisDB) SMembers(args *Args, reply *Reply) error {
 	//}else{
 	//	sval.HsVal.Add(args.Mems...)
 	//}
-	fmt.Printf("SMembers key %s Value %s  \n", args.Key,reply.Value)
-	fmt.Println(args.Mems)
-	reply.Err = OK
-	return nil
+	fmt.Printf("SMembers key %s Value %s  \n", c.Key,Value)
+	addReplyBulk(c,Value)
 }
 
 // list
 
 
-func (db *GedisDB) LPush(args *Args, reply *Reply) error {
+func (s *GedisServer) LPush(c *GdClient)  {
 	var lval list.List
 	var valObj ValueObj
-	if _, ok := db.Dict[args.Key]; !ok {
+	db := &s.DB[c.DBId]
+	var Mems []string
+	//TODO 支持多个元素
+	Mems = append(Mems, c.Argv[6])
+	Mems = append(Mems, c.Argv[8])
+	if _, ok := db.Dict[c.Key]; !ok {
 		db.Mu.Lock()	//创建新键值对时才使用全局锁
 		defer db.Mu.Unlock()
 		//不存在存在
@@ -389,34 +402,33 @@ func (db *GedisDB) LPush(args *Args, reply *Reply) error {
 		valObj.Value = &lval
 		valObj.Datatype = 4
 	}else{
-		valObj = db.Dict[args.Key]
+		valObj = db.Dict[c.Key]
 		lval = valObj.Value.(list.List)
 	}
 	//将元素循环加入列表 头部
-	for _, item := range args.Mems{
+	for _, item := range Mems{
 		lval.PushFront(item)
 	}
-	db.Dict[args.Key] = valObj
-	fmt.Printf("LPush key %s Mem \n", args.Key)
-	fmt.Println(args.Mems)
-	reply.Err = OK
-	return nil
+	db.Dict[c.Key] = valObj
+	fmt.Printf("LPush key %s Mem \n", c.Key)
+	fmt.Println(Mems)
+	addReplyBulk(c,"+OK")
+
 }
 
-func (db *GedisDB) LPop(args *Args, reply *Reply) error {
-	if _, ok := db.Dict[args.Key]; !ok {
-		reply.Value = ""
+func (s *GedisServer) LPop(c *GdClient)  {
+	db := &s.DB[c.DBId]
+	var Value string
+	if _, ok := db.Dict[c.Key]; !ok {
+		Value = ""
 	}else{
-		valObj := db.Dict[args.Key]
+		valObj := db.Dict[c.Key]
 		lval := valObj.Value.(*list.List)
-		reply.Value = ""
+		Value = ""
 		if(lval.Len()>0){
-			reply.Value = lval.Remove(lval.Front()).(string)
+			Value = lval.Remove(lval.Front()).(string)
 		}
 	}
-
-	fmt.Printf("LPush key %s Mem \n", args.Key)
-	fmt.Println(args.Mems)
-	reply.Err = OK
-	return nil
+	fmt.Printf("LPush key %s Mem \n", c.Key)
+	addReplyBulk(c,Value)
 }
