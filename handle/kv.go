@@ -2,8 +2,10 @@ package handle
 
 import (
 	"../table"
-	"strconv"
 	"container/list"
+	"strconv"
+	"strings"
+
 	//"bufio"
 	"fmt"
 	"sync"
@@ -27,20 +29,45 @@ type ValueObj struct {
 	Datatype int8		// 0:string 1:hash 2:set 3:zset 4:list
 	Value interface{}
 }
+
 /**
  每个数据库节点的数据结构
  */
-type RedisDB struct {
+type GedisDB struct {
 	Mu   sync.Mutex
 	Dict map[string]ValueObj
 }
-
-type RedisServer struct {
-	DBnum   int8
+type GedisServer struct {
+	DBnum   int
 	Pid     int
-	DB[] RedisDB
+	DB[] GedisDB
+	Commands         map[string]*GedisCommand
 }
 
+//命令函数指针
+type CommandProc func(c *GdClient)
+
+type GedisCommand struct {
+	Name string
+	Proc CommandProc
+}
+
+//每次连接，创建一个对应的客户端
+type GdClient struct {
+	Db       *GedisDB
+	DBId	 int		//当前使用的数据库id
+	QueryBuf string		//查询缓冲区
+
+	Cmd      *GedisCommand
+	Argv     []string
+	Argc     int
+	Key      string
+
+	Reqtype  int		//请求的类型：内联命令还是多条命令
+	Ctime    int		//客户端创建时间
+	Buf      string		//回复缓冲区
+	FakeFlag bool
+}
 
 type Err string
 
@@ -66,41 +93,106 @@ type HASHTBVal struct {
 	Data map[string]string
 }
 
+//命令解析
+func (c *GdClient) ProcessInputBuffer() error {
+	cmdStrArr := strings.Split(c.QueryBuf, "\r\n")
 
-func (db *RedisDB) Get(args *Args, reply *Reply) error {
+	cmd := cmdStrArr[2]
+	cmdLen := len(cmdStrArr)
+	fmt.Println("cmdLen %d", cmdLen)
+	cmd = strings.ToLower(cmd)
+	fmt.Println("cmd " + cmd)
+
+	c.Argc = cmdLen
+	c.Argv = cmdStrArr
+	return nil
+}
 
 
-	val, ok := db.Dict[args.Key]
-	if ok {
-		reply.Err = OK
-		reply.Value = val.Value.(string)
+//创建客户端
+func (s *GedisServer) CreateClient() (c *GdClient) {
+	c = new(GdClient)
+	c.DBId = 0
+	c.QueryBuf = ""
+	return c
+}
+
+func (s *GedisServer) ProcessCommand(c *GdClient) error {
+	if c.Argc<4 {
+		return  nil
+	}
+	cmdName := c.Argv[2]
+	c.Key = c.Argv[4]
+	cmd := lookupCommand(cmdName,s)
+	fmt.Println(cmd, cmdName, s)
+	if cmd != nil {
+		c.Cmd = cmd
+		call(c)
 	} else {
-		reply.Err = ErrNoKey
-		reply.Value = ""
+		fmt.Println("(error) ERR unknown command '%s'", cmdName)
+	}
+
+	return nil
+
+}
+
+// 查找命令对应的执行函数
+func lookupCommand(name string, s *GedisServer) *GedisCommand {
+	if cmd, ok := s.Commands[name]; ok {
+		return cmd
 	}
 	return nil
 }
 
-func (db *RedisDB) Set(args *Args, reply *Reply) error {
+//调用命令的实现函数，执行命令
+func call(c *GdClient) {
+	c.Cmd.Proc(c)
+}
+
+//返回一个 数据
+func addReplyBulk(c *GdClient,retValue string){
+	c.Buf = retValue
+}
+
+
+
+/**
+	以下为数据操作方法
+ */
+
+//get
+func (s *GedisServer) Get(c *GdClient) {
+	val, ok := s.DB[c.DBId].Dict[c.Key]
+	if ok {
+		addReplyBulk(c,val.Value.(string))
+	} else {
+		addReplyBulk(c,"nil")
+	}
+}
+
+//set
+func (s *GedisServer) Set(c *GdClient) error {
 	var valObj ValueObj
-	if _, ok := db.Dict[args.Key]; !ok {
+	db := &s.DB[c.DBId]
+	Value := c.Argv[6]
+	if _, ok := db.Dict[c.Key]; !ok {
 		db.Mu.Lock()	//创建新键值对时才使用全局锁
 		defer db.Mu.Unlock()
 
 		valObj = *new(ValueObj)
-		valObj.Value = args.Value
+		valObj.Value = Value
 		valObj.Datatype = 0
 	}else{
-		valObj = db.Dict[args.Key]
-		valObj.Value = args.Value
+		valObj = db.Dict[c.Key]
+		valObj.Value = Value
 	}
 
-	db.Dict[args.Key] = valObj
-	reply.Err = OK
+	db.Dict[c.Key] = valObj
+	addReplyBulk(c,"+OK")
 	return nil
 }
 //HASH
-func (db *RedisDB) HGet(args *Args, reply *Reply) error {
+func (db *GedisDB) HGet(args *Args, reply *Reply) error {
 	hsObj, ok := db.Dict[args.Key]
 	var  val string
 	if(ok){
@@ -120,7 +212,7 @@ func (db *RedisDB) HGet(args *Args, reply *Reply) error {
 	return nil
 }
 
-func (db *RedisDB) HSet(args *Args, reply *Reply) error {
+func (db *GedisDB) HSet(args *Args, reply *Reply) error {
 	var valObj ValueObj
 	if _, ok := db.Dict[args.Key]; !ok {
 		db.Mu.Lock()	//创建新键值对时才使用全局锁
@@ -149,7 +241,7 @@ func (db *RedisDB) HSet(args *Args, reply *Reply) error {
 }
 //zset
 
-func (db *RedisDB) ZScore(args *Args, reply *Reply) error {
+func (db *GedisDB) ZScore(args *Args, reply *Reply) error {
 	valObj := db.Dict[args.Key]
 	zval, ok := valObj.Value.(*table.ZSetType)
 	var  val float64
@@ -169,7 +261,7 @@ func (db *RedisDB) ZScore(args *Args, reply *Reply) error {
 	return nil
 }
 
-func (db *RedisDB) ZAdd(args *Args, reply *Reply) error {
+func (db *GedisDB) ZAdd(args *Args, reply *Reply) error {
 	var valObj ValueObj
 	if _, ok := db.Dict[args.Key]; !ok {
 		db.Mu.Lock()	//创建新键值对时才使用全局锁
@@ -195,7 +287,7 @@ func (db *RedisDB) ZAdd(args *Args, reply *Reply) error {
 	return nil
 }
 
-func (db *RedisDB) SAdd(args *Args, reply *Reply) error {
+func (db *GedisDB) SAdd(args *Args, reply *Reply) error {
 	var sval *table.Set
 	var valObj ValueObj
 	if _, ok := db.Dict[args.Key]; !ok {
@@ -228,7 +320,7 @@ func (db *RedisDB) SAdd(args *Args, reply *Reply) error {
 	return nil
 }
 
-func (db *RedisDB) SCard(args *Args, reply *Reply) error {
+func (db *GedisDB) SCard(args *Args, reply *Reply) error {
 	var sval *table.Set
 	if _, ok := db.Dict[args.Key]; !ok {
 		//不存在存在
@@ -251,7 +343,7 @@ func (db *RedisDB) SCard(args *Args, reply *Reply) error {
 	reply.Err = OK
 	return nil
 }
-func (db *RedisDB) SMembers(args *Args, reply *Reply) error {
+func (db *GedisDB) SMembers(args *Args, reply *Reply) error {
 	var sval *table.Set
 	if _, ok := db.Dict[args.Key]; !ok {
 		//不存在存在
@@ -277,7 +369,7 @@ func (db *RedisDB) SMembers(args *Args, reply *Reply) error {
 // list
 
 
-func (db *RedisDB) LPush(args *Args, reply *Reply) error {
+func (db *GedisDB) LPush(args *Args, reply *Reply) error {
 	var lval list.List
 	var valObj ValueObj
 	if _, ok := db.Dict[args.Key]; !ok {
@@ -304,7 +396,7 @@ func (db *RedisDB) LPush(args *Args, reply *Reply) error {
 	return nil
 }
 
-func (db *RedisDB) LPop(args *Args, reply *Reply) error {
+func (db *GedisDB) LPop(args *Args, reply *Reply) error {
 	if _, ok := db.Dict[args.Key]; !ok {
 		reply.Value = ""
 	}else{
