@@ -11,7 +11,7 @@ import (
 	"./core/config"
 )
 
-var rdServer =  new(handle.RedisServer)
+var gdServer =  new(handle.GedisServer)
 var DBIndex int8
 var confPath = "./conf/server.conf"
 
@@ -37,11 +37,10 @@ func main() {
 	}
 	//数据库初始化
 	DBIndex = 0
-	rdServer.Pid = os.Getpid()
-	rdServer.DBnum = int8(conf.GetIntDefault("DBnum", 16))
-	rdServer.DB = make([]handle.RedisDB, rdServer.DBnum)
-	rdServer.DB[DBIndex] = handle.RedisDB{} //初始化
-	rdServer.DB[DBIndex].Dict = map[string]handle.ValueObj{}
+	gdServer.Pid = os.Getpid()
+	//gdServer.Commands = map[string]*handle.GedisCommand{}	//命令数组
+	initDB(gdServer)
+
 	var tcpAddr *net.TCPAddr
 	host := conf.GetIStringDefault("hostname", "127.0.0.1")
 	port := conf.GetIStringDefault("port", "9999")
@@ -65,6 +64,8 @@ func tcpPipe(conn *net.TCPConn, err error) {
 		fmt.Println("disconnected :" + ipStr)
 		conn.Close()
 	}()
+	c := gdServer.CreateClient()
+
 	//reader := bufio.NewReader(conn)
 	command := make([]byte, 1024)
 	n, err := conn.Read(command)
@@ -72,15 +73,7 @@ func tcpPipe(conn *net.TCPConn, err error) {
 	fmt.Println("cmdstr" + cmdstr)
 
 	reply := parseCmd(cmdstr)
-	//request := protocol.GetRequest(cmdstr)
-	//for {
-	//	message, err := reader.ReadString('\n')
-	//	if err != nil {
-	//		return
-	//	}
-	//
-	//	fmt.Println(string(message))
-	//	msg := time.Now().String() + "\n"
+
 	b := []byte(reply)
 	conn.Write(b)
 	//}
@@ -99,7 +92,7 @@ func parseCmd(cmdStr string) string {
 	key := cmdStrArr[4]
 
 	//获取当前数据库
-	db := rdServer.DB[DBIndex]
+	db := gdServer.DB[DBIndex]
 	switch {
 	case cmd == "get" && cmdLen >= 6:
 		var reqArgs handle.Args
