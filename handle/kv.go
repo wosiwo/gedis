@@ -9,6 +9,7 @@ import (
 	//"bufio"
 	"fmt"
 	"sync"
+	"errors"
 )
 
 
@@ -96,7 +97,7 @@ type HASHTBVal struct {
 //命令解析
 func (c *GdClient) ProcessInputBuffer() error {
 	cmdStrArr := strings.Split(c.QueryBuf, "\r\n")
-
+	//fmt.Println(cmdStrArr)
 	cmd := cmdStrArr[2]
 	cmdLen := len(cmdStrArr)
 	fmt.Println("cmdLen %d", cmdLen)
@@ -118,18 +119,19 @@ func (s *GedisServer) CreateClient() (c *GdClient) {
 }
 
 func (s *GedisServer) ProcessCommand(c *GdClient) error {
-	if c.Argc<4 {
+	if c.Argc<6 {
 		return  nil
 	}
 	cmdName := c.Argv[2]
 	c.Key = c.Argv[4]
 	cmd := lookupCommand(cmdName,s)
-	fmt.Println(cmd, cmdName, s)
+	//fmt.Println(cmd, cmdName, s)
 	if cmd != nil {
 		c.Cmd = cmd
 		call(c)
 	} else {
 		fmt.Println("(error) ERR unknown command '%s'", cmdName)
+		return errors.New("ProcessInputBuffer failed")
 	}
 
 	return nil
@@ -157,11 +159,16 @@ func addReplyBulk(c *GdClient,retValue string){
 
 
 /**
+****************************
 	以下为数据操作方法
+****************************
  */
 
 //get
 func (s *GedisServer) Get(c *GdClient) {
+	//fmt.Println(s.DB)
+	//fmt.Println("s.DB[c.DBId]")
+	//fmt.Println(s.DB[c.DBId])
 	val, ok := s.DB[c.DBId].Dict[c.Key]
 	if ok {
 		addReplyBulk(c,val.Value.(string))
@@ -171,7 +178,7 @@ func (s *GedisServer) Get(c *GdClient) {
 }
 
 //set
-func (s *GedisServer) Set(c *GdClient) error {
+func (s *GedisServer) Set(c *GdClient)  {
 	var valObj ValueObj
 	db := &s.DB[c.DBId]
 	Value := c.Argv[6]
@@ -189,7 +196,7 @@ func (s *GedisServer) Set(c *GdClient) error {
 
 	db.Dict[c.Key] = valObj
 	addReplyBulk(c,"+OK")
-	return nil
+	//return nil
 }
 //HASH
 func (db *GedisDB) HGet(args *Args, reply *Reply) error {

@@ -35,14 +35,17 @@ func main() {
 	}
 	//数据库初始化
 	DBIndex = 0
+	gdServer.DBnum = 16
 	gdServer.Pid = os.Getpid()
 	//gdServer.Commands = map[string]*handle.GedisCommand{}	//命令数组
 	initDB(gdServer)
-
+	//初始化命令哈希表
+	initCommand(gdServer)
 	var tcpAddr *net.TCPAddr
 	host := conf.GetIStringDefault("hostname", "127.0.0.1")
 	port := conf.GetIStringDefault("port", "9999")
 	hostPort := net.JoinHostPort(host, port)
+	fmt.Println(hostPort)
 	tcpAddr, _ = net.ResolveTCPAddr("tcp", hostPort)
 	tcpListener, _ := net.ListenTCP("tcp", tcpAddr)
 	defer tcpListener.Close()
@@ -74,8 +77,12 @@ func tcpPipe(conn *net.TCPConn, err error) {
 	c.QueryBuf = cmdstr			//命令
 	c.ProcessInputBuffer()		//命令解析
 
-	gdServer.ProcessCommand(c)	//执行命令
+	err = gdServer.ProcessCommand(c)	//执行命令
 	//reply := parseCmd(cmdstr)
+	if err != nil {
+		fmt.Println("ProcessInputBuffer err", err)
+		return
+	}
 
 	//返回数据给客户端
 	SendReplyToClient(conn,c)
@@ -85,6 +92,7 @@ func tcpPipe(conn *net.TCPConn, err error) {
 
 
 func initDB(gdServer *handle.GedisServer){
+	gdServer.DB = make([]handle.GedisDB, gdServer.DBnum)
 	for i := 0; i < gdServer.DBnum; i++ {
 		gdServer.DB[i] = handle.GedisDB{} //初始化
 		gdServer.DB[i].Dict = map[string]handle.ValueObj{}
@@ -95,10 +103,12 @@ func initDB(gdServer *handle.GedisServer){
 
 func initCommand(gdServer *handle.GedisServer){
 	getCommand := &handle.GedisCommand{Name: "get", Proc: gdServer.Get}
+	setCommand := &handle.GedisCommand{Name: "get", Proc: gdServer.Set}
 	//setCommand := &handle.GedisCommand{Name: "set", Proc: gdServer.Set}
 
 	gdServer.Commands = map[string]*handle.GedisCommand{
 		"get" : getCommand,
+		"set" : setCommand,
 	}
 }
 
