@@ -2,6 +2,7 @@ package main
 
 import (
 	"./core"
+	"./core/aof"
 	"fmt"
 	"net"
 	"os"
@@ -9,7 +10,7 @@ import (
 	"./core/config"
 )
 
-var gdServer =  new(core.GedisServer)
+var gdServer = new(core.GedisServer)
 var DBIndex int8
 var confPath = "./conf/server.conf"
 
@@ -37,6 +38,14 @@ func main() {
 	DBIndex = 0
 	gdServer.DBnum = 16
 	gdServer.Pid = os.Getpid()
+	//是否开启channel
+	gdServer.IsChannel = conf.GetBoolDefault("isChannel", false)
+	if gdServer.IsChannel {
+		gdServer.WriteC = make(chan core.GdClient)
+		//是否开启channel 必须配置日志路径
+		gdServer.AofPath = conf.GetIStringDefault("aof_path", "./conf/aof.log")
+	}
+
 	//gdServer.Commands = map[string]*core.GedisCommand{}	//命令数组
 	initDB(gdServer)
 	//初始化命令哈希表
@@ -56,6 +65,16 @@ func main() {
 		}
 		fmt.Println("A client connected : " + tcpConn.RemoteAddr().String())
 		go tcpPipe(tcpConn, err)
+		if gdServer.IsChannel {
+			var c core.GdClient
+			select {
+			case c = <-gdServer.WriteC:
+				//写入日志
+				if c.FakeFlag == false {
+					aof.AppendToFile(gdServer.AofPath, c.QueryBuf)
+				}
+			}
+		}
 	}
 }
 
@@ -74,10 +93,10 @@ func tcpPipe(conn *net.TCPConn, err error) {
 	cmdstr := string(command[:n])
 	fmt.Println("cmdstr" + cmdstr)
 
-	c.QueryBuf = cmdstr			//命令
-	c.ProcessInputBuffer()		//命令解析
+	c.QueryBuf = cmdstr    //命令
+	c.ProcessInputBuffer() //命令解析
 
-	err = gdServer.ProcessCommand(c)	//执行命令
+	err = gdServer.ProcessCommand(c) //执行命令
 	//reply := parseCmd(cmdstr)
 	if err != nil {
 		fmt.Println("ProcessInputBuffer err", err)
@@ -85,13 +104,11 @@ func tcpPipe(conn *net.TCPConn, err error) {
 	}
 
 	//返回数据给客户端
-	SendReplyToClient(conn,c)
+	SendReplyToClient(conn, c)
 	//}
 }
 
-
-
-func initDB(gdServer *core.GedisServer){
+func initDB(gdServer *core.GedisServer) {
 	gdServer.DB = make([]core.GedisDB, gdServer.DBnum)
 	for i := 0; i < gdServer.DBnum; i++ {
 		gdServer.DB[i] = core.GedisDB{} //初始化
@@ -99,9 +116,7 @@ func initDB(gdServer *core.GedisServer){
 	}
 }
 
-
-
-func initCommand(gdServer *core.GedisServer){
+func initCommand(gdServer *core.GedisServer) {
 	getCommand := &core.GedisCommand{Name: "get", Proc: gdServer.Get}
 	setCommand := &core.GedisCommand{Name: "get", Proc: gdServer.Set}
 	hgetCommand := &core.GedisCommand{Name: "get", Proc: gdServer.HGet}
@@ -115,21 +130,19 @@ func initCommand(gdServer *core.GedisServer){
 	lpopCommand := &core.GedisCommand{Name: "lpop", Proc: gdServer.LPop}
 
 	gdServer.Commands = map[string]*core.GedisCommand{
-		"get" : getCommand,
-		"set" : setCommand,
-		"hget" : hgetCommand,
-		"hset" : hsetCommand,
-		"zadd" : zaddCommand,
-		"zscore" : zscoreCommand,
-		"sadd" : saddCommand,
-		"scard" : scardCommand,
-		"smembers" : smembersCommand,
-		"lpush" : lpushCommand,
-		"lpop" : lpopCommand,
-
+		"get":      getCommand,
+		"set":      setCommand,
+		"hget":     hgetCommand,
+		"hset":     hsetCommand,
+		"zadd":     zaddCommand,
+		"zscore":   zscoreCommand,
+		"sadd":     saddCommand,
+		"scard":    scardCommand,
+		"smembers": smembersCommand,
+		"lpush":    lpushCommand,
+		"lpop":     lpopCommand,
 	}
 }
-
 
 // 负责传送命令回复的写处理器
 func SendReplyToClient(conn net.Conn, c *core.GdClient) {

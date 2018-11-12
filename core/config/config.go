@@ -111,3 +111,36 @@ func (c *Config) GetIStringDefault(key string, defStr string) (value string) {
 	}
 	return
 }
+
+func (c *Config) GetBool(key string) (value bool, err error) {
+	str, ok := c.data[key]
+	var x int
+	if !ok {
+		err = fmt.Errorf("key [%s] not found", key)
+	}
+	x, err = strconv.Atoi(str)
+	if x == 0 {
+		value = false
+	} else {
+		value = true
+	}
+	return
+}
+
+func (c *Config) GetBoolDefault(key string, defBool bool) (value bool) {
+	str, ok := c.data[key]
+	if !ok {
+		value = defBool
+		return
+	}
+	x, err := strconv.Atoi(str)
+	if x == 0 {
+		value = false
+	} else {
+		value = true
+	}
+	if err != nil {
+		value = defBool
+	}
+	return
+}
