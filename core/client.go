@@ -1,6 +1,7 @@
 package core
 
 import (
+	"net"
 	"strings"
 )
 
@@ -9,16 +10,15 @@ type GdClient struct {
 	Db       *GedisDB
 	DBId     int    //当前使用的数据库id
 	QueryBuf string //查询缓冲区
-
-	Cmd  *GedisCommand
-	Argv []string
-	Argc int
-	Key  string
-
+	Cmd      *GedisCommand
+	Argv     []string
+	Argc     int
+	Key      string
 	ReqType  int    //请求的类型：内联命令还是多条命令
 	CTime    int    //客户端创建时间
 	Buf      string //回复缓冲区
 	FakeFlag bool
+	Conn     *net.TCPConn
 }
 
 //命令解析

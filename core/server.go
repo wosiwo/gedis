@@ -110,9 +110,6 @@ func (s *GedisServer) Set(c *GdClient) {
 		valObj.Value = Value
 	}
 	db.Dict[c.Key] = valObj
-	if s.IsChannel {
-		s.WriteC <- *c
-	}
 	addReplyBulk(c, "+OK")
 }
 
@@ -399,6 +396,7 @@ func (s *GedisServer) RunServer(conf *config.Config) {
 }
 
 func LoadData(gdServer *GedisServer) {
+	fmt.Println("Loading Data......")
 	c := gdServer.CreateClient()
 	c.FakeFlag = true
 	pros := aof.ReadAof(gdServer.AofPath)
@@ -410,7 +408,9 @@ func LoadData(gdServer *GedisServer) {
 		}
 		gdServer.ProcessCommand(c)
 	}
+	fmt.Println("Loading Data is finished")
 }
+
 func initDB(gdServer *GedisServer) {
 	gdServer.DB = make([]GedisDB, gdServer.DBnum)
 	for i := 0; i < gdServer.DBnum; i++ {

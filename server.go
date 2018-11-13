@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 )
 
@@ -29,7 +30,7 @@ func coreArg() {
 func main() {
 	//处理命令行参数
 	coreArg()
-	//读取配置
+	/*---- 读取配置----*/
 	conf, err := config.NewConfig(confPath)
 	if err != nil {
 		fmt.Printf("read config file err: %v", err)
@@ -39,11 +40,11 @@ func main() {
 	sc := make(chan os.Signal)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	go sigHandler(sc)
-	//处理消费队列
+	/*---- 处理消费队列 ----*/
 	go consumeWrite()
-	//初始化
+	/*---- server初始化 ----*/
 	gdServer.RunServer(conf)
-	//监听端口
+	/*---- 监听请求 ---- */
 	var tcpAddr *net.TCPAddr
 	host := conf.GetIStringDefault("hostname", "127.0.0.1")
 	port := conf.GetIStringDefault("port", "9999")
@@ -51,13 +52,14 @@ func main() {
 	tcpAddr, _ = net.ResolveTCPAddr("tcp", hostPort)
 	tcpListener, _ := net.ListenTCP("tcp", tcpAddr)
 	defer tcpListener.Close()
+	/*---- 循环接受请求 ---- */
 	for {
-		//循环接受请求
 		tcpConn, err := tcpListener.AcceptTCP()
 		if err != nil {
 			continue
 		}
 		//fmt.Println("A client connected : " + tcpConn.RemoteAddr().String())
+		/*---- 循环处理请求 ---- */
 		go tcpPipe(tcpConn, err)
 	}
 }
@@ -67,6 +69,8 @@ func consumeWrite() {
 	for c := range gdServer.WriteC {
 		//写入日志
 		if c.FakeFlag == false {
+			gdServer.ProcessCommand(&c) //执行命令
+			SendReplyToClient(c.Conn, &c)
 			gdServer.CmdBuffer.Cmd += c.QueryBuf
 			gdServer.CmdBuffer.Num++
 			//fmt.Println(gdServer.AofLoadNum)
@@ -84,7 +88,7 @@ func tcpPipe(conn *net.TCPConn, err error) {
 	//ipStr := conn.RemoteAddr().String()
 	defer func() {
 		//fmt.Println("disconnected :" + ipStr)
-		conn.Close()
+		//conn.Close()
 	}()
 	c := gdServer.CreateClient()
 	//读取请求内容
@@ -92,9 +96,20 @@ func tcpPipe(conn *net.TCPConn, err error) {
 	n, err := conn.Read(command)
 	cmdstr := string(command[:n])
 	//fmt.Println("cmdstr" + cmdstr)
-	c.QueryBuf = cmdstr              //命令
-	c.ProcessInputBuffer()           //命令解析
-	err = gdServer.ProcessCommand(c) //执行命令
+	c.QueryBuf = cmdstr    //命令
+	c.Conn = conn          //绑定连接
+	c.ProcessInputBuffer() //命令解析
+	if strings.ToUpper(c.Argv[2]) == "SET" {
+		if gdServer.IsChannel {
+			//fmt.Println(c)
+			gdServer.WriteC <- *c
+			return
+		} else {
+			err = gdServer.ProcessCommand(c) //执行命令
+		}
+	} else {
+		err = gdServer.ProcessCommand(c) //执行命令
+	}
 	//reply := parseCmd(cmdstr)
 	if err != nil {
 		fmt.Println("ProcessInputBuffer err", err)
@@ -111,6 +126,7 @@ func SendReplyToClient(conn net.Conn, c *core.GdClient) {
 	rep := fmt.Sprintf("$%d\r\n%s\r\n", len, c.Buf)
 	//fmt.Println("replyVal " + c.Buf)
 	conn.Write([]byte(rep))
+	conn.Close()
 }
 
 //信号处理
