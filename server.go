@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"time"
 )
 
 var gdServer = new(core.GedisServer)
@@ -49,28 +48,32 @@ func main() {
 			continue
 		}
 		//fmt.Println("A client connected : " + tcpConn.RemoteAddr().String())
-		tcpConn.SetDeadline(time.Now().Add(time.Duration(10) * time.Second))
 		go tcpPipe(tcpConn, err)
-		if gdServer.IsChannel {
-			var c core.GdClient
-			select {
-			case c = <-gdServer.WriteC:
-				//写入日志
-				if c.FakeFlag == false {
-					gdServer.CmdBuffer.Cmd += c.QueryBuf
-					gdServer.CmdBuffer.Num++
-					if gdServer.CmdBuffer.Num == gdServer.AofLoadNum {
-						aof.AppendToFile(gdServer.AofPath, gdServer.CmdBuffer.Cmd)
-						gdServer.CmdBuffer.Cmd = ""
-						gdServer.CmdBuffer.Num = 0
-					}
+		consumeWrite()
+	}
+}
+
+func consumeWrite() {
+	if gdServer.IsChannel {
+		var c core.GdClient
+		select {
+		case c = <-gdServer.WriteC:
+			//写入日志
+			if c.FakeFlag == false {
+				gdServer.CmdBuffer.Cmd += c.QueryBuf
+				gdServer.CmdBuffer.Num++
+				if gdServer.CmdBuffer.Num == gdServer.AofLoadNum {
+					aof.AppendToFile(gdServer.AofPath, gdServer.CmdBuffer.Cmd)
+					gdServer.CmdBuffer.Cmd = ""
+					gdServer.CmdBuffer.Num = 0
 				}
-			default:
-				//fmt.Printf("no one was ready to communicate\n")
 			}
+		default:
+			//fmt.Printf("no one was ready to communicate\n")
 		}
 	}
 }
+
 func tcpPipe(conn *net.TCPConn, err error) {
 	//ipStr := conn.RemoteAddr().String()
 	defer func() {

@@ -77,9 +77,7 @@ func (s *GedisServer) ProcessCommand(c *GdClient) error {
 		fmt.Println("(error) ERR unknown command ", cmdName)
 		return errors.New("ProcessInputBuffer failed")
 	}
-
 	return nil
-
 }
 
 //get
@@ -397,6 +395,7 @@ func (s *GedisServer) RunServer(conf *config.Config) {
 	//初始化命令哈希表
 	initCommand(s)
 }
+
 func initDB(gdServer *GedisServer) {
 	gdServer.DB = make([]GedisDB, gdServer.DBnum)
 	for i := 0; i < gdServer.DBnum; i++ {
@@ -404,6 +403,7 @@ func initDB(gdServer *GedisServer) {
 		gdServer.DB[i].Dict = map[string]ValueObj{}
 	}
 }
+
 func initCommand(gdServer *GedisServer) {
 	getCommand := &GedisCommand{Name: "GET", Proc: gdServer.Get}
 	setCommand := &GedisCommand{Name: "SET", Proc: gdServer.Set}
