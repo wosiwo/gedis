@@ -27,11 +27,13 @@ func (c *GdClient) ProcessInputBuffer() error {
 	cmdLen := len(cmdStrArr)
 	//fmt.Println("cmdLen %d", cmdLen)
 	if len(cmdStrArr) > 1 {
-		cmd := cmdStrArr[2]
-		cmd = strings.ToLower(cmd)
+		//cmd := cmdStrArr[2]
+		//cmd = strings.ToLower(cmd)
 		//fmt.Println("cmd " + cmd)
 		c.Argc = cmdLen
 		c.Argv = cmdStrArr
+	} else {
+		//fmt.Println(cmdStrArr)
 	}
 	return nil
 }

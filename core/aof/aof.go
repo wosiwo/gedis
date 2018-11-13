@@ -6,10 +6,12 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"sync"
 	"syscall"
 )
 
 type CmdBuffer struct {
+	Mut sync.Mutex
 	Cmd string
 	Num int
 }

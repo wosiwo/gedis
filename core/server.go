@@ -7,6 +7,7 @@ import (
 	"container/list"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -377,8 +378,8 @@ func addReplyBulk(c *GdClient, retValue string) {
 }
 
 func (s *GedisServer) RunServer(conf *config.Config) {
+	//fmt.Println(conf)
 	//数据库初始化
-
 	s.DBnum = 16
 	s.Pid = os.Getpid()
 	//是否开启channel
@@ -387,15 +388,29 @@ func (s *GedisServer) RunServer(conf *config.Config) {
 		s.WriteC = make(chan GdClient, 1024)
 		//是否开启channel 必须配置日志路径
 		s.AofPath = conf.GetIStringDefault("aof_path", "./conf/aof.log")
-		s.AofLoadNum = conf.GetIntDefault("aof_load_num", 1000)
+		s.AofLoadNum = conf.GetIntDefault("aof_load_num", 1)
 	}
-
 	//gdServer.Commands = map[string]*core.GedisCommand{}	//命令数组
 	initDB(s)
 	//初始化命令哈希表
 	initCommand(s)
+	//加载aof日志
+	LoadData(s)
 }
 
+func LoadData(gdServer *GedisServer) {
+	c := gdServer.CreateClient()
+	c.FakeFlag = true
+	pros := aof.ReadAof(gdServer.AofPath)
+	for _, v := range pros {
+		c.QueryBuf = string(v)
+		err := c.ProcessInputBuffer()
+		if err != nil {
+			log.Println("ProcessInputBuffer err", err)
+		}
+		gdServer.ProcessCommand(c)
+	}
+}
 func initDB(gdServer *GedisServer) {
 	gdServer.DB = make([]GedisDB, gdServer.DBnum)
 	for i := 0; i < gdServer.DBnum; i++ {
