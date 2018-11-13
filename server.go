@@ -67,9 +67,9 @@ func main() {
 //消费写操作
 func consumeWrite() {
 	for c := range gdServer.WriteC {
+		gdServer.ProcessCommand(&c) //执行命令
 		//写入日志
 		if c.FakeFlag == false {
-			gdServer.ProcessCommand(&c) //执行命令
 			SendReplyToClient(c.Conn, &c)
 			gdServer.CmdBuffer.Cmd += c.QueryBuf
 			gdServer.CmdBuffer.Num++
@@ -99,6 +99,7 @@ func tcpPipe(conn *net.TCPConn, err error) {
 	c.QueryBuf = cmdstr    //命令
 	c.Conn = conn          //绑定连接
 	c.ProcessInputBuffer() //命令解析
+
 	if strings.ToUpper(c.Argv[2]) == "SET" {
 		if gdServer.IsChannel {
 			//fmt.Println(c)
