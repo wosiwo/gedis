@@ -22,7 +22,7 @@ type HASHTBVal struct {
   值对象
 */
 type ValueObj struct {
-	Mu       sync.Mutex
+	Rw       sync.RWMutex
 	Datatype int8 // 0:string 1:hash 2:set 3:zset 4:list
 	Value    interface{}
 }
@@ -32,7 +32,7 @@ type ValueObj struct {
 */
 type GedisDB struct {
 	Mu   sync.Mutex
-	Dict map[string]ValueObj
+	Dict map[string]*ValueObj
 }
 
 type GedisServer struct {
@@ -81,14 +81,24 @@ func (s *GedisServer) ProcessCommand(c *GdClient) error {
 	return nil
 }
 
+
+
+
 //get
 func (s *GedisServer) Get(c *GdClient) {
 	//fmt.Println(s.DB)
 	//fmt.Println("s.DB[c.DBId]")
 	//fmt.Println(s.DB[c.DBId])
 	val, ok := s.DB[c.DBId].Dict[c.Key]
+	defer func(ok bool){
+		if ok {
+			val.Rw.RUnlock()	//解除读锁
+		}
+	}(ok)
 	if ok {
+		val.Rw.RLock()	//加读锁
 		addReplyBulk(c, val.Value.(string))
+
 	} else {
 		addReplyBulk(c, "nil")
 	}
@@ -96,20 +106,26 @@ func (s *GedisServer) Get(c *GdClient) {
 
 //set
 func (s *GedisServer) Set(c *GdClient) {
-	var valObj ValueObj
+	var valObj *ValueObj
 	db := &s.DB[c.DBId]
 	Value := c.Argv[6]
-	if _, ok := db.Dict[c.Key]; !ok {
-		//db.Mu.Lock() //创建新键值对时才使用全局锁
-		//defer db.Mu.Unlock()
-		valObj = *new(ValueObj)
+	valObj, ok := db.Dict[c.Key];
+	defer func(ok bool){
+		if ok {
+			valObj.Rw.Unlock()	//解除写锁
+		}
+	}(ok)
+	if !ok {
+		valObj = new(ValueObj)
 		valObj.Value = Value
 		valObj.Datatype = 0
+		db.Dict[c.Key] = valObj
 	} else {
-		valObj = db.Dict[c.Key]
+		valObj.Rw.Lock()
+		//valObj = db.Dict[c.Key]
 		valObj.Value = Value
 	}
-	db.Dict[c.Key] = valObj
+
 	addReplyBulk(c, "+OK")
 }
 
@@ -119,7 +135,13 @@ func (s *GedisServer) HGet(c *GdClient) {
 	hsObj, ok := db.Dict[c.Key]
 	var val string
 	Field := c.Argv[6]
+	defer func(ok bool){
+		if ok {
+			hsObj.Rw.RUnlock()	//解除读锁
+		}
+	}(ok)
 	if ok {
+		hsObj.Rw.RLock() //加读锁
 		hsval := hsObj.Value.(*HASHTBVal)
 		val, ok = hsval.Data[Field]
 	}
@@ -133,25 +155,31 @@ func (s *GedisServer) HGet(c *GdClient) {
 }
 
 func (s *GedisServer) HSet(c *GdClient) {
-	var valObj ValueObj
+	var valObj *ValueObj
 	db := &s.DB[c.DBId]
 	Field := c.Argv[6]
 	Value := c.Argv[8]
-	if _, ok := db.Dict[c.Key]; !ok {
-		db.Mu.Lock() //创建新键值对时才使用全局锁
+	valObj, ok := db.Dict[c.Key];
+	defer func(ok bool){
+		if ok {
+			valObj.Rw.Unlock()	//解除写锁
+		}
+	}(ok)
+	if !ok {
 		defer db.Mu.Unlock()
 		var hsval = new(HASHTBVal)
-		valObj = *new(ValueObj)
+		valObj = new(ValueObj)
 		valObj.Datatype = 1
 		hsval.Data = make(map[string]string)
 		hsval.Data[Field] = Value
 		valObj.Value = hsval
+		db.Dict[c.Key] = valObj
 	} else {
-		valObj = db.Dict[c.Key]
+		valObj.Rw.Lock() 	//加写锁
+		//valObj = db.Dict[c.Key]
 		hsval := valObj.Value.(*HASHTBVal)
 		hsval.Data[Field] = Value
 	}
-	db.Dict[c.Key] = valObj
 	if s.IsChannel {
 		s.WriteC <- *c
 	}
@@ -166,7 +194,15 @@ func (s *GedisServer) ZScore(c *GdClient) {
 	zval, ok := valObj.Value.(*table.ZSetType)
 	Mem := c.Argv[6]
 	var val float64
+
+	defer func(ok bool){
+		if ok {
+			valObj.Rw.RUnlock()	//解除读锁
+		}
+	}(ok)
+
 	if ok {
+		valObj.Rw.RLock()
 		val, ok = zval.Score(Mem)
 	}
 	fmt.Printf("HGet key %s Field %s \n", c.Key, Mem)
@@ -182,21 +218,29 @@ func (s *GedisServer) ZScore(c *GdClient) {
 }
 
 func (s *GedisServer) ZAdd(c *GdClient) {
-	var valObj ValueObj
+	var valObj *ValueObj
 	db := &s.DB[c.DBId]
 	Score, _ := strconv.ParseFloat(c.Argv[6], 64)
 	Mem := c.Argv[8]
-	if _, ok := db.Dict[c.Key]; !ok {
+	valObj, ok := db.Dict[c.Key];
+	defer func(ok bool){
+		if ok {
+			valObj.Rw.Unlock()	//解除写锁
+		}
+	}(ok)
+	if !ok {
 		db.Mu.Lock() //创建新键值对时才使用全局锁
 		defer db.Mu.Unlock()
 		zval := table.New()
 		zval.Add(Score, Mem)
 		//值对象
-		valObj = *new(ValueObj)
+		valObj = new(ValueObj)
 		valObj.Value = zval
 		valObj.Datatype = 3
+		db.Dict[c.Key] = valObj
 	} else {
-		valObj = db.Dict[c.Key]
+		valObj.Rw.Lock()
+		//valObj = db.Dict[c.Key]
 		if valObj.Datatype != 3 { //判断键的类型
 			addReplyBulk(c, "key exists but not zset")
 			return
@@ -204,7 +248,6 @@ func (s *GedisServer) ZAdd(c *GdClient) {
 		zval := valObj.Value.(*table.ZSetType)
 		zval.Add(Score, Mem)
 	}
-	db.Dict[c.Key] = valObj
 	if s.IsChannel {
 		s.WriteC <- *c
 	}
@@ -214,23 +257,31 @@ func (s *GedisServer) ZAdd(c *GdClient) {
 
 func (s *GedisServer) SAdd(c *GdClient) {
 	var sval *table.Set
-	var valObj ValueObj
+	var valObj *ValueObj
 	db := &s.DB[c.DBId]
 	var Mems []string
 	//TODO 支持多个元素
 	Mems = append(Mems, c.Argv[6])
 	Mems = append(Mems, c.Argv[8])
-	if _, ok := db.Dict[c.Key]; !ok {
-		db.Mu.Lock() //创建新键值对时才使用全局锁
-		defer db.Mu.Unlock()
+	valObj, ok := db.Dict[c.Key];
+	defer func(ok bool){
+		if ok {
+			valObj.Rw.Unlock()	//解除写锁
+		}
+	}(ok)
+	if !ok {
+		//db.Mu.Lock() //创建新键值对时才使用全局锁
+		//defer db.Mu.Unlock()
 		//不存在存在
 		sval = table.NewSet(Mems...)
 		//值对象
-		valObj = *new(ValueObj)
+		valObj = new(ValueObj)
 		valObj.Value = &sval
 		valObj.Datatype = 2
+		db.Dict[c.Key] = valObj
 	} else {
-		valObj = db.Dict[c.Key]
+		valObj.Rw.Lock()
+		//valObj = db.Dict[c.Key]
 		sval = valObj.Value.(*table.Set)
 		sval.HsVal.Add(Mems...)
 	}
@@ -242,7 +293,6 @@ func (s *GedisServer) SAdd(c *GdClient) {
 	//	sval.HsVal.Add(args.Mems...)
 	//}
 
-	db.Dict[c.Key] = valObj
 	fmt.Printf("SAdd key %s Score %s Mem \n", c.Key)
 	fmt.Println(Mems)
 	if s.IsChannel {
@@ -278,13 +328,22 @@ func (s *GedisServer) SCard(c *GdClient) {
 
 func (s *GedisServer) SMembers(c *GdClient) {
 	var sval *table.Set
+	var valObj *ValueObj
+
 	db := &s.DB[c.DBId]
 	var Value string
-	if _, ok := db.Dict[c.Key]; !ok {
+	valObj, ok := db.Dict[c.Key];
+	defer func(ok bool){
+		if ok {
+			valObj.Rw.RUnlock()	//解除读锁
+		}
+	}(ok)
+	if !ok {
 		//不存在存在
 		Value = ""
 	} else {
-		valObj := db.Dict[c.Key]
+		valObj.Rw.RLock()
+		//valObj := db.Dict[c.Key]
 		sval = valObj.Value.(*table.Set)
 		Value = sval.HsVal.SMembers()
 	}
@@ -302,23 +361,30 @@ func (s *GedisServer) SMembers(c *GdClient) {
 // list
 func (s *GedisServer) LPush(c *GdClient) {
 	var lval list.List
-	var valObj ValueObj
+	var valObj *ValueObj
 	db := &s.DB[c.DBId]
 	var Mems []string
 	//TODO 支持多个元素
 	Mems = append(Mems, c.Argv[6])
 	Mems = append(Mems, c.Argv[8])
-	if _, ok := db.Dict[c.Key]; !ok {
+	valObj, ok := db.Dict[c.Key];
+	defer func(ok bool){
+		if ok {
+			valObj.Rw.Unlock()	//解除写锁
+		}
+	}(ok)
+	if  !ok {
 		db.Mu.Lock() //创建新键值对时才使用全局锁
 		defer db.Mu.Unlock()
 		//不存在存在
 		lval = *list.New()
 		//值对象
-		valObj = *new(ValueObj)
+		valObj = new(ValueObj)
 		valObj.Value = &lval
 		valObj.Datatype = 4
 	} else {
-		valObj = db.Dict[c.Key]
+		valObj.Rw.Lock()
+		//valObj = db.Dict[c.Key]
 		lval = valObj.Value.(list.List)
 	}
 	//将元素循环加入列表 头部
@@ -338,10 +404,17 @@ func (s *GedisServer) LPush(c *GdClient) {
 func (s *GedisServer) LPop(c *GdClient) {
 	db := &s.DB[c.DBId]
 	var Value string
-	if _, ok := db.Dict[c.Key]; !ok {
+	valObj, ok := db.Dict[c.Key];
+	defer func(ok bool){
+		if ok {
+			valObj.Rw.RUnlock()	//解除读锁
+		}
+	}(ok)
+	if !ok {
 		Value = ""
 	} else {
-		valObj := db.Dict[c.Key]
+		valObj.Rw.RLock()
+		//valObj := db.Dict[c.Key]
 		lval := valObj.Value.(*list.List)
 		Value = ""
 		if lval.Len() > 0 {
@@ -415,7 +488,7 @@ func initDB(gdServer *GedisServer) {
 	gdServer.DB = make([]GedisDB, gdServer.DBnum)
 	for i := 0; i < gdServer.DBnum; i++ {
 		gdServer.DB[i] = GedisDB{} //初始化
-		gdServer.DB[i].Dict = map[string]ValueObj{}
+		gdServer.DB[i].Dict = map[string]*ValueObj{}
 	}
 }
 

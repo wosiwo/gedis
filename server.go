@@ -100,7 +100,7 @@ func tcpPipe(conn *net.TCPConn, err error) {
 	c.Conn = conn          //绑定连接
 	c.ProcessInputBuffer() //命令解析
 
-	if strings.ToUpper(c.Argv[2]) == "SET" {
+	if strings.ToUpper(c.Argv[2]) == "SET" && 1==2 {
 		if gdServer.IsChannel {
 			//fmt.Println(c)
 			gdServer.WriteC <- *c
