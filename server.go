@@ -67,7 +67,6 @@ func consumeWrite() {
 	for c := range gdServer.WriteC {
 		//写入日志
 		if c.FakeFlag == false {
-			gdServer.CmdBuffer.Mut.Lock()
 			gdServer.CmdBuffer.Cmd += c.QueryBuf
 			gdServer.CmdBuffer.Num++
 			//fmt.Println(gdServer.AofLoadNum)
@@ -76,7 +75,6 @@ func consumeWrite() {
 				gdServer.CmdBuffer.Cmd = ""
 				gdServer.CmdBuffer.Num = 0
 			}
-			gdServer.CmdBuffer.Mut.Unlock()
 		}
 	}
 }
