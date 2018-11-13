@@ -3,12 +3,11 @@ package main
 import (
 	"./core"
 	"./core/aof"
+	"./core/config"
 	"fmt"
 	"net"
 	"os"
 	"time"
-	//"./table"
-	"./core/config"
 )
 
 var gdServer = new(core.GedisServer)
@@ -35,22 +34,8 @@ func main() {
 		fmt.Printf("read config file err: %v", err)
 		return
 	}
-	//数据库初始化
-	DBIndex = 0
-	gdServer.DBnum = 16
-	gdServer.Pid = os.Getpid()
-	//是否开启channel
-	gdServer.IsChannel = conf.GetBoolDefault("isChannel", false)
-	if gdServer.IsChannel {
-		gdServer.WriteC = make(chan core.GdClient)
-		//是否开启channel 必须配置日志路径
-		gdServer.AofPath = conf.GetIStringDefault("aof_path", "./conf/aof.log")
-	}
-
-	//gdServer.Commands = map[string]*core.GedisCommand{}	//命令数组
-	initDB(gdServer)
-	//初始化命令哈希表
-	initCommand(gdServer)
+	//初始化
+	gdServer.RunServer(conf)
 	var tcpAddr *net.TCPAddr
 	host := conf.GetIStringDefault("hostname", "127.0.0.1")
 	port := conf.GetIStringDefault("port", "9999")
@@ -72,13 +57,20 @@ func main() {
 			case c = <-gdServer.WriteC:
 				//写入日志
 				if c.FakeFlag == false {
-					aof.AppendToFile(gdServer.AofPath, c.QueryBuf)
+					gdServer.CmdBuffer.Cmd += c.QueryBuf
+					gdServer.CmdBuffer.Num++
+					if gdServer.CmdBuffer.Num == gdServer.AofLoadNum {
+						aof.AppendToFile(gdServer.AofPath, gdServer.CmdBuffer.Cmd)
+						gdServer.CmdBuffer.Cmd = ""
+						gdServer.CmdBuffer.Num = 0
+					}
 				}
+			default:
+				//fmt.Printf("no one was ready to communicate\n")
 			}
 		}
 	}
 }
-
 func tcpPipe(conn *net.TCPConn, err error) {
 	//ipStr := conn.RemoteAddr().String()
 	defer func() {
@@ -86,63 +78,22 @@ func tcpPipe(conn *net.TCPConn, err error) {
 		conn.Close()
 	}()
 	c := gdServer.CreateClient()
-
 	//reader := bufio.NewReader(conn)
 	//读取请求内容
 	command := make([]byte, 1024)
 	n, err := conn.Read(command)
 	cmdstr := string(command[:n])
 	//fmt.Println("cmdstr" + cmdstr)
-
-	c.QueryBuf = cmdstr    //命令
-	c.ProcessInputBuffer() //命令解析
-
+	c.QueryBuf = cmdstr              //命令
+	c.ProcessInputBuffer()           //命令解析
 	err = gdServer.ProcessCommand(c) //执行命令
 	//reply := parseCmd(cmdstr)
 	if err != nil {
 		fmt.Println("ProcessInputBuffer err", err)
 		return
 	}
-
 	//返回数据给客户端
 	SendReplyToClient(conn, c)
-	//}
-}
-
-func initDB(gdServer *core.GedisServer) {
-	gdServer.DB = make([]core.GedisDB, gdServer.DBnum)
-	for i := 0; i < gdServer.DBnum; i++ {
-		gdServer.DB[i] = core.GedisDB{} //初始化
-		gdServer.DB[i].Dict = map[string]core.ValueObj{}
-	}
-}
-
-func initCommand(gdServer *core.GedisServer) {
-	getCommand := &core.GedisCommand{Name: "GET", Proc: gdServer.Get}
-	setCommand := &core.GedisCommand{Name: "SET", Proc: gdServer.Set}
-	hgetCommand := &core.GedisCommand{Name: "HGET", Proc: gdServer.HGet}
-	hsetCommand := &core.GedisCommand{Name: "HSET", Proc: gdServer.HSet}
-	zaddCommand := &core.GedisCommand{Name: "ZADD", Proc: gdServer.ZAdd}
-	zscoreCommand := &core.GedisCommand{Name: "ZSCORE", Proc: gdServer.ZScore}
-	saddCommand := &core.GedisCommand{Name: "SADD", Proc: gdServer.SAdd}
-	scardCommand := &core.GedisCommand{Name: "SCARD", Proc: gdServer.SCard}
-	smembersCommand := &core.GedisCommand{Name: "SMEMBERS", Proc: gdServer.SMembers}
-	lpushCommand := &core.GedisCommand{Name: "LPUSH", Proc: gdServer.LPush}
-	lpopCommand := &core.GedisCommand{Name: "LPOP", Proc: gdServer.LPop}
-
-	gdServer.Commands = map[string]*core.GedisCommand{
-		"GET":      getCommand,
-		"SET":      setCommand,
-		"HGET":     hgetCommand,
-		"HSET":     hsetCommand,
-		"ZADD":     zaddCommand,
-		"ZSCORE":   zscoreCommand,
-		"SADD":     saddCommand,
-		"SCARD":    scardCommand,
-		"SMEMBERS": smembersCommand,
-		"LPUSH":    lpushCommand,
-		"LPOP":     lpopCommand,
-	}
 }
 
 // 负责传送命令回复的写处理器
@@ -151,6 +102,5 @@ func SendReplyToClient(conn net.Conn, c *core.GdClient) {
 	//fmt.Println(c.Buf)
 	rep := fmt.Sprintf("$%d\r\n%s\r\n", len, c.Buf)
 	//fmt.Println("replyVal " + c.Buf)
-
 	conn.Write([]byte(rep))
 }

@@ -1,39 +1,32 @@
 package table
 
 import (
-	//"runtime"
-	//"sort"
-	//"strconv"
-	//"sync"
+	//"fmt"
+	"sort"
 	"sync"
 )
 
-//type HashSet Set
-
-type HashSet struct {
+type IntSet struct {
 	sync.RWMutex
-	Val map[string]bool
+	Val map[int]bool
 }
 
-/**
- * 初始化集合
- */
 // 新建集合对象
 // 可以传入初始元素
-func NewHashSet(items ...string) *HashSet {
-	s := &HashSet{
-		Val: make(map[string]bool, len(items)),
+func NewIntSet(items ...int) *IntSet {
+	s := &IntSet{
+		Val: make(map[int]bool, len(items)),
 	}
 	s.Add(items...)
 	return s
 }
 
 // 创建副本
-func (s *HashSet) Duplicate() *HashSet {
+func (s *IntSet) Duplicate() *IntSet {
 	s.Lock()
 	defer s.Unlock()
-	r :=&HashSet{
-		Val:make(map[string]bool),
+	r := &IntSet{
+		Val: make(map[int]bool, len(s.Val)),
 	}
 	for e := range s.Val {
 		r.Val[e] = true
@@ -41,9 +34,8 @@ func (s *HashSet) Duplicate() *HashSet {
 	return r
 }
 
-
 // 添加元素
-func (s *HashSet) Add(items ...string) {
+func (s *IntSet) Add(items ...int) {
 	s.Lock()
 	defer s.Unlock()
 	for _, v := range items {
@@ -52,7 +44,7 @@ func (s *HashSet) Add(items ...string) {
 }
 
 // 删除元素
-func (s *HashSet) Remove(items ...string) {
+func (s *IntSet) IntSetRemove(items ...int) {
 	s.Lock()
 	defer s.Unlock()
 	for _, v := range items {
@@ -61,7 +53,7 @@ func (s *HashSet) Remove(items ...string) {
 }
 
 // 判断元素是否存在
-func (s *HashSet) Has(items ...string) bool {
+func (s *IntSet) IntSetHas(items ...int) bool {
 	s.RLock()
 	defer s.RUnlock()
 	for _, v := range items {
@@ -73,57 +65,67 @@ func (s *HashSet) Has(items ...string) bool {
 }
 
 // 统计元素个数
-func (s *HashSet) Count() int {
+func (s *IntSet) IntSetCount() int {
 	s.Lock()
 	defer s.Unlock()
 	return len(s.Val)
 }
 
 // 清空集合
-func (s *HashSet) Clear() {
+func (s *IntSet) IntSetClear() {
 	s.Lock()
 	defer s.Unlock()
-	s.Val = map[string]bool{}
+	s.Val = map[int]bool{}
 }
 
 // 空集合判断
-func (s *HashSet) Empty() bool {
+func (s *IntSet) IntSetEmpty() bool {
 	s.Lock()
 	defer s.Unlock()
 	return len(s.Val) == 0
 }
-//
-// 获取元素列表
-func (s *HashSet) SMembers() string {
+
+// 获取元素列表（无序）
+func (s *IntSet) IntSetList() []int {
 	s.RLock()
 	defer s.RUnlock()
-	list := ""
-	//TODO 每个元素输出一行
+	list := make([]int, 0, len(s.Val))
 	for item := range s.Val {
-		list += " "+item
+		list = append(list, item)
 	}
 	return list
 }
 
+// 获取元素列表（有序）
+func (s *IntSet) IntSetSortedList() []int {
+	s.RLock()
+	defer s.RUnlock()
+	list := make([]int, 0, len(s.Val))
+	for item := range s.Val {
+		list = append(list, item)
+	}
+	sort.Ints(list)
+	return list
+}
 
 // 并集
 // 获取 s 与参数的并集，结果存入 s
-func (s *HashSet) Union(HashSets ...*HashSet) {
+func (s *IntSet) IntSetUnion(IntSets ...*IntSet) {
 	// 为了防止多例程死锁，不能同时锁定两个集合
 	// 所以这里没有锁定 s，而是创建了一个临时集合
 	r := s.Duplicate()
 	// 获取并集
-	for _, IntHashSet := range HashSets {
-		IntHashSet.Lock()
-		for e := range IntHashSet.Val {
+	for _, IntSet := range IntSets {
+		IntSet.Lock()
+		for e := range IntSet.Val {
 			r.Val[e] = true
 		}
-		IntHashSet.Unlock()
+		IntSet.Unlock()
 	}
 	// 将结果转入 s
 	s.Lock()
 	defer s.Unlock()
-	s.Val = map[string]bool{}
+	s.Val = map[int]bool{}
 	for e := range r.Val {
 		s.Val[e] = true
 	}
@@ -131,43 +133,43 @@ func (s *HashSet) Union(HashSets ...*HashSet) {
 
 // 并集（函数）
 // 获取所有参数的并集，并返回
-func Union(HashSets ...*HashSet) *HashSet {
+func IntSetUnion(IntSets ...*IntSet) *IntSet {
 	// 处理参数数量
-	if len(HashSets) == 0 {
-		return NewHashSet()
-	} else if len(HashSets) == 1 {
-		return HashSets[0]
+	if len(IntSets) == 0 {
+		return NewIntSet()
+	} else if len(IntSets) == 1 {
+		return IntSets[0]
 	}
 	// 获取并集
-	r := HashSets[0].Duplicate()
-	for _, IntHashSet := range HashSets[1:] {
-		IntHashSet.Lock()
-		for e := range IntHashSet.Val {
+	r := IntSets[0].Duplicate()
+	for _, IntSet := range IntSets[1:] {
+		IntSet.Lock()
+		for e := range IntSet.Val {
 			r.Val[e] = true
 		}
-		IntHashSet.Unlock()
+		IntSet.Unlock()
 	}
 	return r
 }
 
 // 差集
 // 获取 s 与所有参数的差集，结果存入 s
-func (s *HashSet) Minus(HashSets ...*HashSet) {
+func (s *IntSet) IntSetMinus(IntSets ...*IntSet) {
 	// 为了防止多例程死锁，不能同时锁定两个集合
 	// 所以这里没有锁定 s，而是创建了一个临时集合
 	r := s.Duplicate()
 	// 获取差集
-	for _, IntHashSet := range HashSets {
-		IntHashSet.Lock()
-		for e := range IntHashSet.Val {
+	for _, IntSet := range IntSets {
+		IntSet.Lock()
+		for e := range IntSet.Val {
 			delete(r.Val, e)
 		}
-		IntHashSet.Unlock()
+		IntSet.Unlock()
 	}
 	// 将结果转入 s
 	s.Lock()
 	defer s.Unlock()
-	s.Val = map[string]bool{}
+	s.Val = map[int]bool{}
 	for e := range r.Val {
 		s.Val[e] = true
 	}
@@ -175,17 +177,17 @@ func (s *HashSet) Minus(HashSets ...*HashSet) {
 
 // 差集（函数）
 // 获取第 1 个参数与其它参数的差集，并返回
-func Minus(HashSets ...*HashSet) *HashSet {
+func IntSetMinus(IntSets ...*IntSet) *IntSet {
 	// 处理参数数量
-	if len(HashSets) == 0 {
-		return NewHashSet()
-	} else if len(HashSets) == 1 {
-		return HashSets[0]
+	if len(IntSets) == 0 {
+		return NewIntSet()
+	} else if len(IntSets) == 1 {
+		return IntSets[0]
 	}
 	// 获取差集
-	r := HashSets[0].Duplicate()
-	for _, IntHashSet := range HashSets[1:] {
-		for e := range IntHashSet.Val {
+	r := IntSets[0].Duplicate()
+	for _, IntSet := range IntSets[1:] {
+		for e := range IntSet.Val {
 			delete(r.Val, e)
 		}
 	}
@@ -194,24 +196,24 @@ func Minus(HashSets ...*HashSet) *HashSet {
 
 // 交集
 // 获取 s 与其它参数的交集，结果存入 s
-func (s *HashSet) Intersect(HashSets ...*HashSet) {
+func (s *IntSet) IntSetIntersect(IntSets ...*IntSet) {
 	// 为了防止多例程死锁，不能同时锁定两个集合
 	// 所以这里没有锁定 s，而是创建了一个临时集合
 	r := s.Duplicate()
-	// 获取交集
-	for _, IntHashSet := range HashSets {
-		IntHashSet.Lock()
+
+	for _, IntSet := range IntSets {
+		IntSet.Lock()
 		for e := range r.Val {
-			if _, ok := IntHashSet.Val[e]; !ok {
+			if _, ok := IntSet.Val[e]; !ok {
 				delete(r.Val, e)
 			}
 		}
-		IntHashSet.Unlock()
+		IntSet.Unlock()
 	}
 	// 将结果转入 s
 	s.Lock()
 	defer s.Unlock()
-	s.Val = map[string]bool{}
+	s.Val = map[int]bool{}
 	for e := range r.Val {
 		s.Val[e] = true
 	}
@@ -219,18 +221,18 @@ func (s *HashSet) Intersect(HashSets ...*HashSet) {
 
 // 交集（函数）
 // 获取所有参数的交集，并返回
-func Intersect(HashSets ...*HashSet) *HashSet {
+func IntSetIntersect(IntSets ...*IntSet) *IntSet {
 	// 处理参数数量
-	if len(HashSets) == 0 {
-		return NewHashSet()
-	} else if len(HashSets) == 1 {
-		return HashSets[0]
+	if len(IntSets) == 0 {
+		return NewIntSet()
+	} else if len(IntSets) == 1 {
+		return IntSets[0]
 	}
 	// 获取交集
-	r := HashSets[0].Duplicate()
-	for _, IntHashSet := range HashSets[1:] {
+	r := IntSets[0].Duplicate()
+	for _, IntSet := range IntSets[1:] {
 		for e := range r.Val {
-			if _, ok := IntHashSet.Val[e]; !ok {
+			if _, ok := IntSet.Val[e]; !ok {
 				delete(r.Val, e)
 			}
 		}
@@ -240,7 +242,7 @@ func Intersect(HashSets ...*HashSet) *HashSet {
 
 // 补集
 // 获取 s 相对于 full 的补集，结果存入 s
-func (s *HashSet) Complement(full *HashSet) {
+func (s *IntSet) IntSetComplement(full *IntSet) {
 	r := full.Duplicate()
 	s.Lock()
 	defer s.Unlock()
@@ -249,7 +251,7 @@ func (s *HashSet) Complement(full *HashSet) {
 		delete(r.Val, e)
 	}
 	// 将结果转入 s
-	s.Val = map[string]bool{}
+	s.Val = map[int]bool{}
 	for e := range r.Val {
 		s.Val[e] = true
 	}

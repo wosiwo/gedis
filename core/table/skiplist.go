@@ -6,26 +6,22 @@ package table
 //"github.com/xcltapestry/xclpkg/algorithm"
 
 import (
-//"fmt"
-"math/rand"
+	//"fmt"
+	"math/rand"
 )
-
 
 const SKIPLIST_MAXLEVEL = 32 //8
 const SKIPLIST_P = 4
 
-
 type Node struct {
-	Forward  []Node
-	Value interface{}
-	Member interface{}
+	Forward []Node
+	Value   interface{}
+	Member  interface{}
 }
 
-
-func NewNode(v interface{},m interface{},level int) *Node {
-	return &Node{Value: v,Member:m, Forward: make([]Node, level)}
+func NewNode(v interface{}, m interface{}, level int) *Node {
+	return &Node{Value: v, Member: m, Forward: make([]Node, level)}
 }
-
 
 type SkipList struct {
 	Header *Node
@@ -33,7 +29,7 @@ type SkipList struct {
 }
 
 func NewSkipList() *SkipList {
-	return &SkipList{Level: 1, Header: NewNode(0, "",SKIPLIST_MAXLEVEL)}
+	return &SkipList{Level: 1, Header: NewNode(0, "", SKIPLIST_MAXLEVEL)}
 }
 
 func (skipList *SkipList) Insert(key int, member string) {
@@ -45,8 +41,8 @@ func (skipList *SkipList) Insert(key int, member string) {
 		for {
 			if node.Forward[i].Value != nil && node.Forward[i].Value.(int) < key {
 				node = &node.Forward[i]
-			}else{
-				break;
+			} else {
+				break
 			}
 		}
 		update[i] = node
@@ -60,7 +56,7 @@ func (skipList *SkipList) Insert(key int, member string) {
 		skipList.Level = level
 	}
 
-	newNode := NewNode(key,member,level)
+	newNode := NewNode(key, member, level)
 
 	for i := 0; i < level; i++ {
 		newNode.Forward[i] = update[i].Forward[i]
@@ -93,8 +89,8 @@ func (skipList *SkipList) PrintSkipList() {
 			if node.Value != nil {
 				//fmt.Printf("%d ", node.Value.(int))
 				node = node.Forward[i]
-			}else{
-				break;
+			} else {
+				break
 			}
 		}
 		//fmt.Println("\n--------------------------------------------------------")
@@ -102,7 +98,6 @@ func (skipList *SkipList) PrintSkipList() {
 
 	//fmt.Println("Current MaxLevel:", skipList.Level)
 }
-
 
 func (skipList *SkipList) Search(key int) *Node {
 
@@ -121,10 +116,10 @@ func (skipList *SkipList) Search(key int) *Node {
 				return &node.Forward[i]
 			}
 
-			if  node.Forward[i].Value.(int) < key {
+			if node.Forward[i].Value.(int) < key {
 				node = &node.Forward[i]
 				continue
-			}else{ // > key
+			} else { // > key
 				break
 			}
 		} //end for find
@@ -133,8 +128,7 @@ func (skipList *SkipList) Search(key int) *Node {
 	return nil
 }
 
-
-func (skipList *SkipList)Remove(key int) {
+func (skipList *SkipList) Remove(key int) {
 
 	update := make(map[int]*Node)
 	node := skipList.Header
@@ -152,10 +146,10 @@ func (skipList *SkipList)Remove(key int) {
 				break
 			}
 
-			if  node.Forward[i].Value.(int) < key {
+			if node.Forward[i].Value.(int) < key {
 				node = &node.Forward[i]
 				continue
-			}else{ // > key
+			} else { // > key
 				break
 			}
 
@@ -163,9 +157,9 @@ func (skipList *SkipList)Remove(key int) {
 
 	} //end level
 
-	for i,v := range update {
+	for i, v := range update {
 		if v == skipList.Header {
-			skipList.Level --
+			skipList.Level--
 		}
 		v.Forward[i] = v.Forward[i].Forward[i]
 	}

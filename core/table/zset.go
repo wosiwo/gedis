@@ -10,7 +10,6 @@ type Zset struct {
 }
 type ZSetType Zset
 
-
 /**
  * 初始化有续集
  */
@@ -28,16 +27,15 @@ func (z *ZSetType) Add(score float64, member string) {
 		if old == score {
 			return
 		}
-		z.sl.Remove(int(old))	//将旧的节点删除
+		z.sl.Remove(int(old)) //将旧的节点删除
 	}
-	z.sl.Insert(int(score),member)	//跳跃表应该存储member值
+	z.sl.Insert(int(score), member) //跳跃表应该存储member值
 	z.tbl[member] = score
 }
 
-
 func (z *ZSetType) Rem(member string) {
 	if score, ok := z.tbl[member]; ok {
-		z.sl.Remove(int(score))	//将节点删除
+		z.sl.Remove(int(score)) //将节点删除
 		delete(z.tbl, member)
 	}
 }
@@ -45,8 +43,6 @@ func (z *ZSetType) Rem(member string) {
 func (z *ZSetType) Count() int {
 	return len(z.tbl)
 }
-
-
 
 func (z *ZSetType) Score(member string) (float64, bool) {
 	score, ex := z.tbl[member]

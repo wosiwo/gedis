@@ -1,21 +1,21 @@
 package core
 
 import (
-	"../table"
+	"./aof"
+	"./config"
+	"./table"
 	"container/list"
+	"errors"
+	"fmt"
+	"os"
 	"strconv"
 	"strings"
-
-	"errors"
-	//"bufio"
-	"fmt"
 	"sync"
 )
 
-const (
-	OK       = "OK"
-	ErrNoKey = "ErrNoKey"
-)
+type HASHTBVal struct {
+	Data map[string]string
+}
 
 /**
   值对象
@@ -35,13 +35,15 @@ type GedisDB struct {
 }
 
 type GedisServer struct {
-	DBnum     int
-	Pid       int
-	DB        []GedisDB
-	WriteC    chan GdClient //写channel
-	IsChannel bool
-	Commands  map[string]*GedisCommand
-	AofPath   string
+	DBnum      int
+	Pid        int
+	DB         []GedisDB
+	WriteC     chan GdClient //写channel
+	IsChannel  bool
+	CmdBuffer  aof.CmdBuffer
+	Commands   map[string]*GedisCommand
+	AofPath    string
+	AofLoadNum int
 }
 
 //命令函数指针
@@ -50,62 +52,6 @@ type CommandProc func(c *GdClient)
 type GedisCommand struct {
 	Name string
 	Proc CommandProc
-}
-
-//每次连接，创建一个对应的客户端
-type GdClient struct {
-	Db       *GedisDB
-	DBId     int    //当前使用的数据库id
-	QueryBuf string //查询缓冲区
-
-	Cmd  *GedisCommand
-	Argv []string
-	Argc int
-	Key  string
-
-	Reqtype  int    //请求的类型：内联命令还是多条命令
-	Ctime    int    //客户端创建时间
-	Buf      string //回复缓冲区
-	FakeFlag bool
-}
-
-type Err string
-
-type Args struct {
-	Key   string
-	Mem   string
-	Value string
-	Field string
-	Score float64
-	Mems  []string
-}
-
-type Reply struct {
-	Err   Err
-	Value string
-}
-
-//
-// Server
-//
-
-type HASHTBVal struct {
-	Data map[string]string
-}
-
-//命令解析
-func (c *GdClient) ProcessInputBuffer() error {
-	cmdStrArr := strings.Split(c.QueryBuf, "\r\n")
-	cmdLen := len(cmdStrArr)
-	//fmt.Println("cmdLen %d", cmdLen)
-	if len(cmdStrArr) > 1 {
-		cmd := cmdStrArr[2]
-		cmd = strings.ToLower(cmd)
-		//fmt.Println("cmd " + cmd)
-		c.Argc = cmdLen
-		c.Argv = cmdStrArr
-	}
-	return nil
 }
 
 //创建客户端
@@ -135,31 +81,6 @@ func (s *GedisServer) ProcessCommand(c *GdClient) error {
 	return nil
 
 }
-
-// 查找命令对应的执行函数
-func lookupCommand(name string, s *GedisServer) *GedisCommand {
-	name = strings.ToUpper(name)
-	if cmd, ok := s.Commands[name]; ok {
-		return cmd
-	}
-	return nil
-}
-
-//调用命令的实现函数，执行命令
-func call(c *GdClient) {
-	c.Cmd.Proc(c)
-}
-
-//返回一个 数据
-func addReplyBulk(c *GdClient, retValue string) {
-	c.Buf = retValue
-}
-
-/**
-****************************
-	以下为数据操作方法
-****************************
-*/
 
 //get
 func (s *GedisServer) Get(c *GdClient) {
@@ -436,4 +357,77 @@ func (s *GedisServer) LPop(c *GdClient) {
 	}
 	fmt.Printf("LPush key %s Mem \n", c.Key)
 	addReplyBulk(c, Value)
+}
+
+// 查找命令对应的执行函数
+func lookupCommand(name string, s *GedisServer) *GedisCommand {
+	name = strings.ToUpper(name)
+	if cmd, ok := s.Commands[name]; ok {
+		return cmd
+	}
+	return nil
+}
+
+//调用命令的实现函数，执行命令
+func call(c *GdClient) {
+	c.Cmd.Proc(c)
+}
+
+//返回一个 数据
+func addReplyBulk(c *GdClient, retValue string) {
+	c.Buf = retValue
+}
+
+func (s *GedisServer) RunServer(conf *config.Config) {
+	//数据库初始化
+
+	s.DBnum = 16
+	s.Pid = os.Getpid()
+	//是否开启channel
+	s.IsChannel = conf.GetBoolDefault("isChannel", false)
+	if s.IsChannel {
+		s.WriteC = make(chan GdClient, 1024)
+		//是否开启channel 必须配置日志路径
+		s.AofPath = conf.GetIStringDefault("aof_path", "./conf/aof.log")
+		s.AofLoadNum = conf.GetIntDefault("aof_load_num", 1000)
+	}
+
+	//gdServer.Commands = map[string]*core.GedisCommand{}	//命令数组
+	initDB(s)
+	//初始化命令哈希表
+	initCommand(s)
+}
+func initDB(gdServer *GedisServer) {
+	gdServer.DB = make([]GedisDB, gdServer.DBnum)
+	for i := 0; i < gdServer.DBnum; i++ {
+		gdServer.DB[i] = GedisDB{} //初始化
+		gdServer.DB[i].Dict = map[string]ValueObj{}
+	}
+}
+func initCommand(gdServer *GedisServer) {
+	getCommand := &GedisCommand{Name: "GET", Proc: gdServer.Get}
+	setCommand := &GedisCommand{Name: "SET", Proc: gdServer.Set}
+	hgetCommand := &GedisCommand{Name: "HGET", Proc: gdServer.HGet}
+	hsetCommand := &GedisCommand{Name: "HSET", Proc: gdServer.HSet}
+	zaddCommand := &GedisCommand{Name: "ZADD", Proc: gdServer.ZAdd}
+	zscoreCommand := &GedisCommand{Name: "ZSCORE", Proc: gdServer.ZScore}
+	saddCommand := &GedisCommand{Name: "SADD", Proc: gdServer.SAdd}
+	scardCommand := &GedisCommand{Name: "SCARD", Proc: gdServer.SCard}
+	smembersCommand := &GedisCommand{Name: "SMEMBERS", Proc: gdServer.SMembers}
+	lpushCommand := &GedisCommand{Name: "LPUSH", Proc: gdServer.LPush}
+	lpopCommand := &GedisCommand{Name: "LPOP", Proc: gdServer.LPop}
+
+	gdServer.Commands = map[string]*GedisCommand{
+		"GET":      getCommand,
+		"SET":      setCommand,
+		"HGET":     hgetCommand,
+		"HSET":     hsetCommand,
+		"ZADD":     zaddCommand,
+		"ZSCORE":   zscoreCommand,
+		"SADD":     saddCommand,
+		"SCARD":    scardCommand,
+		"SMEMBERS": smembersCommand,
+		"LPUSH":    lpushCommand,
+		"LPOP":     lpopCommand,
+	}
 }

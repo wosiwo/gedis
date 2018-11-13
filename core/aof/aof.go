@@ -9,6 +9,11 @@ import (
 	"syscall"
 )
 
+type CmdBuffer struct {
+	Cmd string
+	Num int
+}
+
 //AppendToFile 写文件
 func AppendToFile(fileName string, content string) error {
 	// 以只写的模式，打开文件
