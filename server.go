@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"time"
 	//"./table"
 	"./core/config"
 )
@@ -54,7 +55,6 @@ func main() {
 	host := conf.GetIStringDefault("hostname", "127.0.0.1")
 	port := conf.GetIStringDefault("port", "9999")
 	hostPort := net.JoinHostPort(host, port)
-	fmt.Println(hostPort)
 	tcpAddr, _ = net.ResolveTCPAddr("tcp", hostPort)
 	tcpListener, _ := net.ListenTCP("tcp", tcpAddr)
 	defer tcpListener.Close()
@@ -63,7 +63,8 @@ func main() {
 		if err != nil {
 			continue
 		}
-		fmt.Println("A client connected : " + tcpConn.RemoteAddr().String())
+		//fmt.Println("A client connected : " + tcpConn.RemoteAddr().String())
+		tcpConn.SetDeadline(time.Now().Add(time.Duration(10) * time.Second))
 		go tcpPipe(tcpConn, err)
 		if gdServer.IsChannel {
 			var c core.GdClient
@@ -79,9 +80,9 @@ func main() {
 }
 
 func tcpPipe(conn *net.TCPConn, err error) {
-	ipStr := conn.RemoteAddr().String()
+	//ipStr := conn.RemoteAddr().String()
 	defer func() {
-		fmt.Println("disconnected :" + ipStr)
+		//fmt.Println("disconnected :" + ipStr)
 		conn.Close()
 	}()
 	c := gdServer.CreateClient()
@@ -91,7 +92,7 @@ func tcpPipe(conn *net.TCPConn, err error) {
 	command := make([]byte, 1024)
 	n, err := conn.Read(command)
 	cmdstr := string(command[:n])
-	fmt.Println("cmdstr" + cmdstr)
+	//fmt.Println("cmdstr" + cmdstr)
 
 	c.QueryBuf = cmdstr    //命令
 	c.ProcessInputBuffer() //命令解析
@@ -117,39 +118,39 @@ func initDB(gdServer *core.GedisServer) {
 }
 
 func initCommand(gdServer *core.GedisServer) {
-	getCommand := &core.GedisCommand{Name: "get", Proc: gdServer.Get}
-	setCommand := &core.GedisCommand{Name: "get", Proc: gdServer.Set}
-	hgetCommand := &core.GedisCommand{Name: "get", Proc: gdServer.HGet}
-	hsetCommand := &core.GedisCommand{Name: "hset", Proc: gdServer.HSet}
-	zaddCommand := &core.GedisCommand{Name: "zadd", Proc: gdServer.ZAdd}
-	zscoreCommand := &core.GedisCommand{Name: "zscore", Proc: gdServer.ZScore}
-	saddCommand := &core.GedisCommand{Name: "sadd", Proc: gdServer.SAdd}
-	scardCommand := &core.GedisCommand{Name: "scard", Proc: gdServer.SCard}
-	smembersCommand := &core.GedisCommand{Name: "smembers", Proc: gdServer.SMembers}
-	lpushCommand := &core.GedisCommand{Name: "lpush", Proc: gdServer.LPush}
-	lpopCommand := &core.GedisCommand{Name: "lpop", Proc: gdServer.LPop}
+	getCommand := &core.GedisCommand{Name: "GET", Proc: gdServer.Get}
+	setCommand := &core.GedisCommand{Name: "SET", Proc: gdServer.Set}
+	hgetCommand := &core.GedisCommand{Name: "HGET", Proc: gdServer.HGet}
+	hsetCommand := &core.GedisCommand{Name: "HSET", Proc: gdServer.HSet}
+	zaddCommand := &core.GedisCommand{Name: "ZADD", Proc: gdServer.ZAdd}
+	zscoreCommand := &core.GedisCommand{Name: "ZSCORE", Proc: gdServer.ZScore}
+	saddCommand := &core.GedisCommand{Name: "SADD", Proc: gdServer.SAdd}
+	scardCommand := &core.GedisCommand{Name: "SCARD", Proc: gdServer.SCard}
+	smembersCommand := &core.GedisCommand{Name: "SMEMBERS", Proc: gdServer.SMembers}
+	lpushCommand := &core.GedisCommand{Name: "LPUSH", Proc: gdServer.LPush}
+	lpopCommand := &core.GedisCommand{Name: "LPOP", Proc: gdServer.LPop}
 
 	gdServer.Commands = map[string]*core.GedisCommand{
-		"get":      getCommand,
-		"set":      setCommand,
-		"hget":     hgetCommand,
-		"hset":     hsetCommand,
-		"zadd":     zaddCommand,
-		"zscore":   zscoreCommand,
-		"sadd":     saddCommand,
-		"scard":    scardCommand,
-		"smembers": smembersCommand,
-		"lpush":    lpushCommand,
-		"lpop":     lpopCommand,
+		"GET":      getCommand,
+		"SET":      setCommand,
+		"HGET":     hgetCommand,
+		"HSET":     hsetCommand,
+		"ZADD":     zaddCommand,
+		"ZSCORE":   zscoreCommand,
+		"SADD":     saddCommand,
+		"SCARD":    scardCommand,
+		"SMEMBERS": smembersCommand,
+		"LPUSH":    lpushCommand,
+		"LPOP":     lpopCommand,
 	}
 }
 
 // 负责传送命令回复的写处理器
 func SendReplyToClient(conn net.Conn, c *core.GdClient) {
 	len := len(c.Buf)
-	fmt.Println(c.Buf)
+	//fmt.Println(c.Buf)
 	rep := fmt.Sprintf("$%d\r\n%s\r\n", len, c.Buf)
-	fmt.Println("replyVal " + c.Buf)
+	//fmt.Println("replyVal " + c.Buf)
 
 	conn.Write([]byte(rep))
 }

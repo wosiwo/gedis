@@ -96,15 +96,15 @@ type HASHTBVal struct {
 //命令解析
 func (c *GdClient) ProcessInputBuffer() error {
 	cmdStrArr := strings.Split(c.QueryBuf, "\r\n")
-	//fmt.Println(cmdStrArr)
-	cmd := cmdStrArr[2]
 	cmdLen := len(cmdStrArr)
-	fmt.Println("cmdLen %d", cmdLen)
-	cmd = strings.ToLower(cmd)
-	fmt.Println("cmd " + cmd)
-
-	c.Argc = cmdLen
-	c.Argv = cmdStrArr
+	//fmt.Println("cmdLen %d", cmdLen)
+	if len(cmdStrArr) > 1 {
+		cmd := cmdStrArr[2]
+		cmd = strings.ToLower(cmd)
+		//fmt.Println("cmd " + cmd)
+		c.Argc = cmdLen
+		c.Argv = cmdStrArr
+	}
 	return nil
 }
 
@@ -128,7 +128,7 @@ func (s *GedisServer) ProcessCommand(c *GdClient) error {
 		c.Cmd = cmd
 		call(c)
 	} else {
-		fmt.Println("(error) ERR unknown command '%s'", cmdName)
+		fmt.Println("(error) ERR unknown command ", cmdName)
 		return errors.New("ProcessInputBuffer failed")
 	}
 
@@ -138,6 +138,7 @@ func (s *GedisServer) ProcessCommand(c *GdClient) error {
 
 // 查找命令对应的执行函数
 func lookupCommand(name string, s *GedisServer) *GedisCommand {
+	name = strings.ToUpper(name)
 	if cmd, ok := s.Commands[name]; ok {
 		return cmd
 	}
@@ -179,8 +180,8 @@ func (s *GedisServer) Set(c *GdClient) {
 	db := &s.DB[c.DBId]
 	Value := c.Argv[6]
 	if _, ok := db.Dict[c.Key]; !ok {
-		db.Mu.Lock() //创建新键值对时才使用全局锁
-		defer db.Mu.Unlock()
+		//db.Mu.Lock() //创建新键值对时才使用全局锁
+		//defer db.Mu.Unlock()
 		valObj = *new(ValueObj)
 		valObj.Value = Value
 		valObj.Datatype = 0
