@@ -151,9 +151,13 @@ func handleCommand(conn *net.TCPConn,cmdstr string) { //err
 	c.Conn = conn          //绑定连接
 	c.ProcessInputBuffer() //命令解析
 	if c.Argc<6 {
+		//返回数据给客户端
+		c := gdServer.CreateClient()
+		c.Buf = "+error"
+		SendReplyToClient(conn, c)
 		return
 	}
-	if strings.ToUpper(c.Argv[2]) == "SET" && 1==2 {
+	if strings.ToUpper(c.Argv[2]) == "SET"  {
 		if gdServer.IsChannel {
 			//fmt.Println(c)
 			gdServer.WriteC <- *c
