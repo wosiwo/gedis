@@ -8,7 +8,6 @@ import (
 	"net"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 )
 
@@ -91,32 +90,40 @@ func tcpPipe(conn *net.TCPConn, err error) {
 		//conn.Close()
 	}()
 	c := gdServer.CreateClient()
-	//读取请求内容
-	command := make([]byte, 1024)
-	n, err := conn.Read(command)
-	cmdstr := string(command[:n])
-	//fmt.Println("cmdstr" + cmdstr)
-	c.QueryBuf = cmdstr    //命令
-	c.Conn = conn          //绑定连接
-	c.ProcessInputBuffer() //命令解析
-	if strings.ToUpper(c.Argv[2]) == "SET" {
-		if gdServer.IsChannel {
-			//fmt.Println(c)
-			gdServer.WriteC <- *c
+	//长连接读取内容
+	for {
+		command := make([]byte, 1024)
+		n, err := conn.Read(command)
+		if err != nil {
+			fmt.Println("read from client err", err)
+			conn.Close()
 			return
+		}
+		cmdstr := string(command[:n])
+		//fmt.Println("cmdstr" + cmdstr)
+		c.QueryBuf = cmdstr            //命令
+		c.Conn = conn                  //绑定连接
+		c.ProcessInputBuffer(gdServer) //命令解析
+		//if c.Cmd.IsWrite && c.IsNew {
+		if c.Cmd.IsWrite {
+			if gdServer.IsChannel {
+				//fmt.Println(c)
+				gdServer.WriteC <- *c
+				return
+			} else {
+				err = gdServer.ProcessCommand(c) //执行命令
+			}
 		} else {
 			err = gdServer.ProcessCommand(c) //执行命令
 		}
-	} else {
-		err = gdServer.ProcessCommand(c) //执行命令
+		//reply := parseCmd(cmdstr)
+		if err != nil {
+			fmt.Println("ProcessInputBuffer err", err)
+			return
+		}
+		//返回数据给客户端
+		SendReplyToClient(conn, c)
 	}
-	//reply := parseCmd(cmdstr)
-	if err != nil {
-		fmt.Println("ProcessInputBuffer err", err)
-		return
-	}
-	//返回数据给客户端
-	SendReplyToClient(conn, c)
 }
 
 // 负责传送命令回复的写处理器
@@ -126,7 +133,7 @@ func SendReplyToClient(conn net.Conn, c *core.GdClient) {
 	rep := fmt.Sprintf("$%d\r\n%s\r\n", len, c.Buf)
 	//fmt.Println("replyVal " + c.Buf)
 	conn.Write([]byte(rep))
-	conn.Close()
+	//conn.Close()
 }
 
 //信号处理
