@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"net/rpc"
 )
@@ -163,17 +162,17 @@ func zscore(key string,member string) float64 {
 //
 // main
 //
-
-func main() {
-
-	//put("subject", "6.824")
-	//fmt.Printf("Put(subject, 6.824) done\n")
-	//fmt.Printf("get(subject) -> %s\n", get("subject"))
-
-	//hset("keyname","fname", "6.824")
-	//fmt.Printf("get(keyname) -> %s\n", hget("keyname","fname"))
-
-	zadd("keyname","fname", 6.824)
-	fmt.Printf("get(keyname) -> %f\n", zscore("keyname","fname"))
-
-}
+//
+//func main() {
+//
+//	//put("subject", "6.824")
+//	//fmt.Printf("Put(subject, 6.824) done\n")
+//	//fmt.Printf("get(subject) -> %s\n", get("subject"))
+//
+//	//hset("keyname","fname", "6.824")
+//	//fmt.Printf("get(keyname) -> %s\n", hget("keyname","fname"))
+//
+//	zadd("keyname","fname", 6.824)
+//	fmt.Printf("get(keyname) -> %f\n", zscore("keyname","fname"))
+//
+//}

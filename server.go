@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	reuse "github.com/libp2p/go-reuseport"
 )
 
 var gdServer = new(core.GedisServer)
@@ -26,6 +27,31 @@ func coreArg() {
 			fmt.Println("Gedis server v=1.3.0 bits=64") //输出版本号
 			os.Exit(0)
 		}
+	}
+}
+func listenPort(conf *config.Config){
+	/*---- 监听请求 ---- */
+	host := conf.GetIStringDefault("hostname", "127.0.0.1")
+	port := conf.GetIStringDefault("port", "9999")
+	hostPort := net.JoinHostPort(host, port)
+	//tcpAddr, _ := net.ResolveTCPAddr("tcp", hostPort)
+	//tcpListener, _ := net.ListenTCP("tcp", tcpAddr)
+	//net.ListenTCP
+	tcpListener, _ := reuse.Listen("tcp", hostPort)
+	//tcpListener = tcpListener.(*TCPListener)
+	//&TCPListener{fd}
+	//tcpListener.
+	defer tcpListener.Close()
+	/*---- 循环接受请求 ---- */
+	for {
+		//conn, err := tcpListener.AcceptTCP()
+		conn, err := tcpListener.Accept()
+		if err != nil {
+			continue
+		}
+		//fmt.Println("A client connected : " + tcpConn.RemoteAddr().String())
+		/*---- 循环处理请求 ---- */
+		go handleConnection(conn) //, err
 	}
 }
 func main() {
@@ -45,23 +71,11 @@ func main() {
 	go consumeWrite()
 	/*---- server初始化 ----*/
 	gdServer.RunServer(conf)
-	/*---- 监听请求 ---- */
-	host := conf.GetIStringDefault("hostname", "127.0.0.1")
-	port := conf.GetIStringDefault("port", "9999")
-	hostPort := net.JoinHostPort(host, port)
-	tcpAddr, _ := net.ResolveTCPAddr("tcp", hostPort)
-	tcpListener, _ := net.ListenTCP("tcp", tcpAddr)
-	defer tcpListener.Close()
-	/*---- 循环接受请求 ---- */
-	for {
-		conn, err := tcpListener.AcceptTCP()
-		if err != nil {
-			continue
-		}
-		//fmt.Println("A client connected : " + tcpConn.RemoteAddr().String())
-		/*---- 循环处理请求 ---- */
-		go handleConnection(conn) //, err
-	}
+
+	//多个协程监听端口
+	//go listenPort(conf)
+	listenPort(conf)
+
 }
 
 //消费写操作
@@ -84,9 +98,9 @@ func consumeWrite() {
 }
 
 //长连接入口
-func handleConnection(conn *net.TCPConn) {
+func handleConnection(conn net.Conn) {
 	c := gdServer.CreateClient()
-	c.Cn = *conn //命令
+	c.Cn = conn //命令
 	buffer := make([]byte, 1024)
 	for {
 		//log.Print("Receive command '")
