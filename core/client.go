@@ -21,7 +21,7 @@ type GdClient struct {
 	CTime       int               //客户端创建时间
 	Buf         string            //回复缓冲区
 	FakeFlag    bool              //是否是假客户端
-	Cn          net.Conn       //所属连接
+	Cn          *net.TCPConn       //所属连接
 	RW          *bufio.ReadWriter //所属连接
 	IsNew       bool              //是否创建操作
 }

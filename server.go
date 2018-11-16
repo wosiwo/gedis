@@ -45,8 +45,8 @@ func listenPort(conf *config.Config,num int){
 	defer tcpListener.Close()
 	/*---- 循环接受请求 ---- */
 	for {
-		//conn, err := tcpListener.AcceptTCP()
-		conn, err := tcpListener.Accept()
+		conn, err := tcpListener.AcceptTCP()
+		//conn, err := tcpListener.Accept()
 		if err != nil {
 			continue
 		}
@@ -99,7 +99,7 @@ func consumeWrite() {
 }
 
 //长连接入口
-func handleConnection(conn net.Conn,num int) {
+func handleConnection(conn *net.TCPConn,num int) {
 	c := gdServer.CreateClient()
 	c.Cn = conn //命令
 	buffer := make([]byte, 1024)
