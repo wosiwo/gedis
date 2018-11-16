@@ -102,18 +102,18 @@ func (s *GedisServer) Set(c *GdClient) {
 	db := &s.DB[c.DBId]
 	Value := c.Argv[6]
 	valObj, ok := db.Dict[c.Key]
-	defer func(ok bool) {
-		if ok {
-			valObj.Rw.Unlock() //解除写锁
-		}
-	}(ok)
+	//defer func(ok bool) {
+	//	if ok {
+	//		valObj.Rw.Unlock() //解除写锁
+	//	}
+	//}(ok)
 	if !ok {
 		valObj = new(ValueObj)
 		valObj.Value = Value
 		valObj.Datatype = 0
 		db.Dict[c.Key] = valObj
 	} else {
-		valObj.Rw.Lock()
+		//valObj.Rw.Lock()
 		//valObj = db.Dict[c.Key]
 		valObj.Value = Value
 	}
@@ -457,7 +457,9 @@ func (s *GedisServer) RunServer(conf *config.Config) {
 	//初始化命令哈希表
 	initCommand(s)
 	//加载aof日志
-	LoadData(s)
+	if s.IsChannel {
+		LoadData(s)
+	}
 }
 
 func LoadData(gdServer *GedisServer) {
@@ -517,6 +519,6 @@ func initCommand(gdServer *GedisServer) {
 func (s *GedisServer) Command(c *GdClient) {
 	var Value string
 	Value = "+OK"
-	fmt.Printf("LPush key %s Mem \n", c.Key)
+	//fmt.Printf("LPush key %s Mem \n", c.Key)
 	addReplyBulk(c, Value)
 }

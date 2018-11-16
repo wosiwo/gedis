@@ -170,9 +170,11 @@ func sigHandler(c chan os.Signal) {
 
 //退出处理
 func exitHandler() {
-	gdServer.CmdBuffer.Mut.Lock()
-	aof.AppendToFile(gdServer.AofPath, gdServer.CmdBuffer.Cmd)
-	gdServer.CmdBuffer.Mut.Unlock()
+	if gdServer.IsChannel {
+		gdServer.CmdBuffer.Mut.Lock()
+		aof.AppendToFile(gdServer.AofPath, gdServer.CmdBuffer.Cmd)
+		gdServer.CmdBuffer.Mut.Unlock()
+	}
 	fmt.Println("exiting smoothly ...")
 	fmt.Println("bye ")
 	os.Exit(0)
