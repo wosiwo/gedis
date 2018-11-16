@@ -110,7 +110,8 @@ func handleConnection(conn *net.TCPConn) {
 			SendReplyToClient(c)
 			continue
 		}
-		go handleCommand(c)
+		//TODO 手动进程心跳检查
+		handleCommand(c)
 	}
 }
 
