@@ -11,7 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	reuse "github.com/libp2p/go-reuseport"
+	//reuse "github.com/libp2p/go-reuseport"
 )
 
 var gdServer = new(core.GedisServer)
@@ -29,15 +29,16 @@ func coreArg() {
 		}
 	}
 }
-func listenPort(conf *config.Config){
+func listenPort(conf *config.Config,num int){
 	/*---- 监听请求 ---- */
+	net.USE_SO_REUSEPORT = true
 	host := conf.GetIStringDefault("hostname", "127.0.0.1")
 	port := conf.GetIStringDefault("port", "9999")
 	hostPort := net.JoinHostPort(host, port)
-	//tcpAddr, _ := net.ResolveTCPAddr("tcp", hostPort)
-	//tcpListener, _ := net.ListenTCP("tcp", tcpAddr)
+	tcpAddr, _ := net.ResolveTCPAddr("tcp", hostPort)
+	tcpListener, _ := net.ListenTCP("tcp", tcpAddr)
 	//net.ListenTCP
-	tcpListener, _ := reuse.Listen("tcp", hostPort)
+	//tcpListener, _ := reuse.Listen("tcp", hostPort)
 	//tcpListener = tcpListener.(*TCPListener)
 	//&TCPListener{fd}
 	//tcpListener.
@@ -51,7 +52,7 @@ func listenPort(conf *config.Config){
 		}
 		//fmt.Println("A client connected : " + tcpConn.RemoteAddr().String())
 		/*---- 循环处理请求 ---- */
-		go handleConnection(conn) //, err
+		go handleConnection(conn,num) //, err
 	}
 }
 func main() {
@@ -73,8 +74,8 @@ func main() {
 	gdServer.RunServer(conf)
 
 	//多个协程监听端口
-	//go listenPort(conf)
-	listenPort(conf)
+	go listenPort(conf,1)
+	listenPort(conf,2)
 
 }
 
@@ -98,7 +99,7 @@ func consumeWrite() {
 }
 
 //长连接入口
-func handleConnection(conn net.Conn) {
+func handleConnection(conn net.Conn,num int) {
 	c := gdServer.CreateClient()
 	c.Cn = conn //命令
 	buffer := make([]byte, 1024)
@@ -108,7 +109,8 @@ func handleConnection(conn net.Conn) {
 		//fmt.Println(n)
 		switch {
 		case err == io.EOF:
-			log.Println("Reached EOF - close this connection.\n   ---")
+			fmt.Println(num)
+			fmt.Println("Reached EOF - close this connection.\n   ---")
 			return
 		case err != nil:
 			log.Println("\nError reading command", err)
