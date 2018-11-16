@@ -5,10 +5,13 @@ import (
 	"./core/aof"
 	"./core/config"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
+	"time"
 )
 
 var gdServer = new(core.GedisServer)
@@ -59,16 +62,16 @@ func main() {
 		}
 		//fmt.Println("A client connected : " + tcpConn.RemoteAddr().String())
 		/*---- 循环处理请求 ---- */
-		go tcpPipe(tcpConn, err)
+		go handleConnection(tcpConn,2) //, err
 	}
 }
 
 //消费写操作
 func consumeWrite() {
 	for c := range gdServer.WriteC {
+		gdServer.ProcessCommand(&c) //执行命令
 		//写入日志
 		if c.FakeFlag == false {
-			gdServer.ProcessCommand(&c) //执行命令
 			SendReplyToClient(c.Conn, &c)
 			gdServer.CmdBuffer.Cmd += c.QueryBuf
 			gdServer.CmdBuffer.Num++
@@ -82,48 +85,92 @@ func consumeWrite() {
 	}
 }
 
-//多线程处理连接
-func tcpPipe(conn *net.TCPConn, err error) {
-	//ipStr := conn.RemoteAddr().String()
-	defer func() {
-		//fmt.Println("disconnected :" + ipStr)
-		//conn.Close()
-	}()
-	c := gdServer.CreateClient()
-	//长连接读取内容
+//长连接入口
+func handleConnection(conn *net.TCPConn,timeout int) {
+
+	buffer := make([]byte, 2048)
 	for {
-		command := make([]byte, 1024)
-		n, err := conn.Read(command)
-		if err != nil {
-			fmt.Println("read from client err", err)
+		n, err := conn.Read(buffer)
+
+		if err != nil &&  err == io.EOF {	//客户端关闭连接
 			conn.Close()
+			conn = nil
 			return
 		}
-		cmdstr := string(command[:n])
-		//fmt.Println("cmdstr" + cmdstr)
-		c.QueryBuf = cmdstr            //命令
-		c.Conn = conn                  //绑定连接
-		c.ProcessInputBuffer(gdServer) //命令解析
-		//if c.Cmd.IsWrite && c.IsNew {
-		if c.Cmd.IsWrite {
-			if gdServer.IsChannel {
-				//fmt.Println(c)
-				gdServer.WriteC <- *c
-				return
-			} else {
-				err = gdServer.ProcessCommand(c) //执行命令
-			}
+		if err != nil {
+			fmt.Println(conn.RemoteAddr().String(), " connection error: ", err)
+			return
+		}
+		cmdstr := string(buffer[:n])
+		cmdlen := len(cmdstr)
+		if cmdlen<6 {
+			continue
+		}
+		messnager := make(chan string)
+		//心跳计时
+		go HeartBeating(conn,messnager,timeout)
+		//go handleCommand(conn,cmdstr)	//执行客户端上传的命令
+		//检测每次Client是否有数据传来
+		messnager <- cmdstr
+		//Log( "receive data length:",n)
+		//Log(conn.RemoteAddr().String(), "receive data string:", cmdstr)
+
+	}
+}
+
+//心跳计时，根据GravelChannel判断Client是否在设定时间内发来信息
+func HeartBeating(conn *net.TCPConn, readerChannel chan string,timeout int) {
+	select {
+	case cmdstr := <-readerChannel:
+		//Log(conn.RemoteAddr().String(), "receive data string:", cmdstr)
+		//conn.SetDeadline(time.Now().Add(time.Duration(timeout) * time.Second))
+		//conn.SetReadDeadline(time.Now().Add(time.Duration(5) * time.Second))
+		handleCommand(conn,cmdstr)	//执行客户端上传的命令
+		break
+	case <-time.After(time.Second*5):
+		//Log("It's really weird to get Nothing!!!")
+		conn.Close()
+	}
+
+}
+
+func Log(v ...interface{}) {
+	fmt.Println(v...)
+}
+
+//协程处理连接
+func handleCommand(conn *net.TCPConn,cmdstr string) { //err
+	var err error
+	c := gdServer.CreateClient()
+	//读取请求内容
+	//command := make([]byte, 1024)
+	//n, err := conn.Read(command)
+	//cmdstr := string(command[:n])
+	//fmt.Println("cmdstr" + cmdstr)
+	c.QueryBuf = cmdstr    //命令
+	c.Conn = conn          //绑定连接
+	c.ProcessInputBuffer() //命令解析
+	if c.Argc<6 {
+		return
+	}
+	if strings.ToUpper(c.Argv[2]) == "SET" && 1==2 {
+		if gdServer.IsChannel {
+			//fmt.Println(c)
+			gdServer.WriteC <- *c
+			return
 		} else {
 			err = gdServer.ProcessCommand(c) //执行命令
 		}
-		//reply := parseCmd(cmdstr)
-		if err != nil {
-			fmt.Println("ProcessInputBuffer err", err)
-			return
-		}
-		//返回数据给客户端
-		SendReplyToClient(conn, c)
+	} else {
+		err = gdServer.ProcessCommand(c) //执行命令
 	}
+	//reply := parseCmd(cmdstr)
+	if err != nil {
+		fmt.Println("ProcessInputBuffer err", err)
+		return
+	}
+	//返回数据给客户端
+	SendReplyToClient(conn, c)
 }
 
 // 负责传送命令回复的写处理器
