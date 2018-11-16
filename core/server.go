@@ -53,6 +53,7 @@ type CommandProc func(c *GdClient)
 type GedisCommand struct {
 	Name    string
 	IsWrite bool
+	IsPing  bool
 	Proc    CommandProc
 }
 
@@ -65,9 +66,6 @@ func (s *GedisServer) CreateClient() (c *GdClient) {
 }
 
 func (s *GedisServer) ProcessCommand(c *GdClient) error {
-	if c.Argc < 6 {
-		return nil
-	}
 	//fmt.Println(cmd, cmdName, s)
 	if c.Cmd != nil {
 		call(c)
@@ -78,22 +76,19 @@ func (s *GedisServer) ProcessCommand(c *GdClient) error {
 	return nil
 }
 
-
-
-
 //get
 func (s *GedisServer) Get(c *GdClient) {
 	//fmt.Println(s.DB)
 	//fmt.Println("s.DB[c.DBId]")
 	//fmt.Println(s.DB[c.DBId])
 	val, ok := s.DB[c.DBId].Dict[c.Key]
-	defer func(ok bool){
+	defer func(ok bool) {
 		if ok {
-			val.Rw.RUnlock()	//解除读锁
+			val.Rw.RUnlock() //解除读锁
 		}
 	}(ok)
 	if ok {
-		val.Rw.RLock()	//加读锁
+		val.Rw.RLock() //加读锁
 		addReplyBulk(c, val.Value.(string))
 
 	} else {
@@ -106,10 +101,10 @@ func (s *GedisServer) Set(c *GdClient) {
 	var valObj *ValueObj
 	db := &s.DB[c.DBId]
 	Value := c.Argv[6]
-	valObj, ok := db.Dict[c.Key];
-	defer func(ok bool){
+	valObj, ok := db.Dict[c.Key]
+	defer func(ok bool) {
 		if ok {
-			valObj.Rw.Unlock()	//解除写锁
+			valObj.Rw.Unlock() //解除写锁
 		}
 	}(ok)
 	if !ok {
@@ -132,9 +127,9 @@ func (s *GedisServer) HGet(c *GdClient) {
 	hsObj, ok := db.Dict[c.Key]
 	var val string
 	Field := c.Argv[6]
-	defer func(ok bool){
+	defer func(ok bool) {
 		if ok {
-			hsObj.Rw.RUnlock()	//解除读锁
+			hsObj.Rw.RUnlock() //解除读锁
 		}
 	}(ok)
 	if ok {
@@ -156,10 +151,10 @@ func (s *GedisServer) HSet(c *GdClient) {
 	db := &s.DB[c.DBId]
 	Field := c.Argv[6]
 	Value := c.Argv[8]
-	valObj, ok := db.Dict[c.Key];
-	defer func(ok bool){
+	valObj, ok := db.Dict[c.Key]
+	defer func(ok bool) {
 		if ok {
-			valObj.Rw.Unlock()	//解除写锁
+			valObj.Rw.Unlock() //解除写锁
 		}
 	}(ok)
 	if !ok {
@@ -172,7 +167,7 @@ func (s *GedisServer) HSet(c *GdClient) {
 		valObj.Value = hsval
 		db.Dict[c.Key] = valObj
 	} else {
-		valObj.Rw.Lock() 	//加写锁
+		valObj.Rw.Lock() //加写锁
 		//valObj = db.Dict[c.Key]
 		hsval := valObj.Value.(*HASHTBVal)
 		hsval.Data[Field] = Value
@@ -192,9 +187,9 @@ func (s *GedisServer) ZScore(c *GdClient) {
 	Mem := c.Argv[6]
 	var val float64
 
-	defer func(ok bool){
+	defer func(ok bool) {
 		if ok {
-			valObj.Rw.RUnlock()	//解除读锁
+			valObj.Rw.RUnlock() //解除读锁
 		}
 	}(ok)
 
@@ -219,10 +214,10 @@ func (s *GedisServer) ZAdd(c *GdClient) {
 	db := &s.DB[c.DBId]
 	Score, _ := strconv.ParseFloat(c.Argv[6], 64)
 	Mem := c.Argv[8]
-	valObj, ok := db.Dict[c.Key];
-	defer func(ok bool){
+	valObj, ok := db.Dict[c.Key]
+	defer func(ok bool) {
 		if ok {
-			valObj.Rw.Unlock()	//解除写锁
+			valObj.Rw.Unlock() //解除写锁
 		}
 	}(ok)
 	if !ok {
@@ -260,10 +255,10 @@ func (s *GedisServer) SAdd(c *GdClient) {
 	//TODO 支持多个元素
 	Mems = append(Mems, c.Argv[6])
 	Mems = append(Mems, c.Argv[8])
-	valObj, ok := db.Dict[c.Key];
-	defer func(ok bool){
+	valObj, ok := db.Dict[c.Key]
+	defer func(ok bool) {
 		if ok {
-			valObj.Rw.Unlock()	//解除写锁
+			valObj.Rw.Unlock() //解除写锁
 		}
 	}(ok)
 	if !ok {
@@ -329,10 +324,10 @@ func (s *GedisServer) SMembers(c *GdClient) {
 
 	db := &s.DB[c.DBId]
 	var Value string
-	valObj, ok := db.Dict[c.Key];
-	defer func(ok bool){
+	valObj, ok := db.Dict[c.Key]
+	defer func(ok bool) {
 		if ok {
-			valObj.Rw.RUnlock()	//解除读锁
+			valObj.Rw.RUnlock() //解除读锁
 		}
 	}(ok)
 	if !ok {
@@ -364,13 +359,13 @@ func (s *GedisServer) LPush(c *GdClient) {
 	//TODO 支持多个元素
 	Mems = append(Mems, c.Argv[6])
 	Mems = append(Mems, c.Argv[8])
-	valObj, ok := db.Dict[c.Key];
-	defer func(ok bool){
+	valObj, ok := db.Dict[c.Key]
+	defer func(ok bool) {
 		if ok {
-			valObj.Rw.Unlock()	//解除写锁
+			valObj.Rw.Unlock() //解除写锁
 		}
 	}(ok)
-	if  !ok {
+	if !ok {
 		db.Mu.Lock() //创建新键值对时才使用全局锁
 		defer db.Mu.Unlock()
 		//不存在存在
@@ -401,10 +396,10 @@ func (s *GedisServer) LPush(c *GdClient) {
 func (s *GedisServer) LPop(c *GdClient) {
 	db := &s.DB[c.DBId]
 	var Value string
-	valObj, ok := db.Dict[c.Key];
-	defer func(ok bool){
+	valObj, ok := db.Dict[c.Key]
+	defer func(ok bool) {
 		if ok {
-			valObj.Rw.RUnlock()	//解除读锁
+			valObj.Rw.RUnlock() //解除读锁
 		}
 	}(ok)
 	if !ok {
@@ -521,7 +516,7 @@ func initCommand(gdServer *GedisServer) {
 
 func (s *GedisServer) Command(c *GdClient) {
 	var Value string
-	Value = c.QueryBuf
+	Value = "+OK"
 	fmt.Printf("LPush key %s Mem \n", c.Key)
 	addReplyBulk(c, Value)
 }
