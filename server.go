@@ -28,6 +28,25 @@ func coreArg() {
 		}
 	}
 }
+func listenPort(conf *config.Config,num int){
+	/*---- 监听请求 ---- */
+	host := conf.GetIStringDefault("hostname", "127.0.0.1")
+	port := conf.GetIStringDefault("port", "9999")
+	hostPort := net.JoinHostPort(host, port)
+	tcpAddr, _ := net.ResolveTCPAddr("tcp", hostPort)
+	tcpListener, _ := net.ListenTCP("tcp", tcpAddr)
+	defer tcpListener.Close()
+	/*---- 循环接受请求 ---- */
+	for {
+	conn, err := tcpListener.AcceptTCP()
+	if err != nil {
+	continue
+	}
+	//fmt.Println("A client connected : " + tcpConn.RemoteAddr().String())
+	/*---- 循环处理请求 ---- */
+	go handleConnection(conn,num) //, err
+	}
+}
 func main() {
 	//处理命令行参数
 	coreArg()
@@ -45,23 +64,11 @@ func main() {
 	go consumeWrite()
 	/*---- server初始化 ----*/
 	gdServer.RunServer(conf)
-	/*---- 监听请求 ---- */
-	host := conf.GetIStringDefault("hostname", "127.0.0.1")
-	port := conf.GetIStringDefault("port", "9999")
-	hostPort := net.JoinHostPort(host, port)
-	tcpAddr, _ := net.ResolveTCPAddr("tcp", hostPort)
-	tcpListener, _ := net.ListenTCP("tcp", tcpAddr)
-	defer tcpListener.Close()
-	/*---- 循环接受请求 ---- */
-	for {
-		conn, err := tcpListener.AcceptTCP()
-		if err != nil {
-			continue
-		}
-		//fmt.Println("A client connected : " + tcpConn.RemoteAddr().String())
-		/*---- 循环处理请求 ---- */
-		go handleConnection(conn) //, err
-	}
+
+	go listenPort(conf,1)
+	 listenPort(conf,2)
+
+
 }
 
 //消费写操作
@@ -84,7 +91,7 @@ func consumeWrite() {
 }
 
 //长连接入口
-func handleConnection(conn *net.TCPConn) {
+func handleConnection(conn *net.TCPConn,num int) {
 	c := gdServer.CreateClient()
 	c.Cn = *conn //命令
 	buffer := make([]byte, 1024)
@@ -94,6 +101,8 @@ func handleConnection(conn *net.TCPConn) {
 		//fmt.Println(n)
 		switch {
 		case err == io.EOF:
+			//fmt.Println('a')
+			//fmt.Println(num)
 			log.Println("Reached EOF - close this connection.\n   ---")
 			return
 		case err != nil:
