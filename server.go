@@ -4,19 +4,22 @@ import (
 	"./core"
 	"./core/aof"
 	"./core/config"
+	"flag"
 	"fmt"
 	"io"
 	"log"
 	"net"
 	"os"
 	"os/signal"
+	"runtime/pprof"
 	"syscall"
 	//reuse "github.com/libp2p/go-reuseport"
+	_ "net/http/pprof"
 )
-
 var gdServer = new(core.GedisServer)
 var DBIndex int8
 var confPath = "./conf/server.conf"
+var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 
 func coreArg() {
 	//处理命令行参数
@@ -56,6 +59,17 @@ func listenPort(conf *config.Config,num int){
 	}
 }
 func main() {
+	//性能分析
+	flag.Parse()
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
+
 	//处理命令行参数
 	coreArg()
 	/*---- 读取配置----*/
