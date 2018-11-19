@@ -11,10 +11,11 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"runtime"
 	"runtime/pprof"
 	"syscall"
 	//reuse "github.com/libp2p/go-reuseport"
-	_ "net/http/pprof"
+	//_ "net/http/pprof"
 )
 var gdServer = new(core.GedisServer)
 var DBIndex int8
@@ -34,7 +35,16 @@ func coreArg() {
 }
 func listenPort(conf *config.Config,num int){
 	/*---- 监听请求 ---- */
-	net.USE_SO_REUSEPORT = true
+	osName := runtime.GOOS
+	archName := runtime.GOARCH
+	fmt.Println(osName)
+	fmt.Println(archName)
+	//switch runtime.GOOS { case "darwin": case "windows": case "linux": }
+	//ifReUsePort := {"darwin":0}
+	if osName != "darwin" {	//TODO linux下开启多端口监听同个实例
+		net.USE_SO_REUSEPORT = true
+	}
+
 	host := conf.GetIStringDefault("hostname", "127.0.0.1")
 	port := conf.GetIStringDefault("port", "9999")
 	hostPort := net.JoinHostPort(host, port)
@@ -48,7 +58,7 @@ func listenPort(conf *config.Config,num int){
 	defer tcpListener.Close()
 	/*---- 循环接受请求 ---- */
 	for {
-		conn, err := tcpListener.AcceptTCP()
+		conn, err := tcpListener.Accept()
 		//conn, err := tcpListener.Accept()
 		if err != nil {
 			continue
@@ -58,10 +68,30 @@ func listenPort(conf *config.Config,num int){
 		go handleConnection(conn,num) //, err
 	}
 }
+func listenUinxSocket(num int){
+	listener, _ := net.Listen("unix", "/tmp/gedis.sock")
+	defer listener.Close()
+	/*---- 循环接受请求 ---- */
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			continue
+		}
+		//fmt.Println("A client connected : " + tcpConn.RemoteAddr().String())
+		/*---- 循环处理请求 ---- */
+		go handleConnection(conn,num) //, err
+	}
+
+}
 func main() {
+	//procs := runtime.GOMAXPROCS(8)	//查看利用的核心数
+
 	//性能分析
 	flag.Parse()
+	//fmt.Println(procs)
+
 	if *cpuprofile != "" {
+		fmt.Println(cpuprofile)
 		f, err := os.Create(*cpuprofile)
 		if err != nil {
 			log.Fatal(err)
@@ -88,8 +118,9 @@ func main() {
 	gdServer.RunServer(conf)
 
 	//多个协程监听端口
-	go listenPort(conf,1)
-	listenPort(conf,2)
+	//go listenPort(conf,1)
+	go listenUinxSocket(2)
+	listenPort(conf,3)
 
 }
 
@@ -113,7 +144,7 @@ func consumeWrite() {
 }
 
 //长连接入口
-func handleConnection(conn *net.TCPConn,num int) {
+func handleConnection(conn net.Conn,num int) {
 	c := gdServer.CreateClient()
 	c.Cn = conn //命令
 	buffer := make([]byte, 1024)
@@ -141,7 +172,7 @@ func handleConnection(conn *net.TCPConn,num int) {
 			continue
 		}
 		//TODO 手动进行心跳检查
-		handleCommand(c)
+		go handleCommand(c)
 	}
 }
 
@@ -192,6 +223,8 @@ func sigHandler(c chan os.Signal) {
 	for s := range c {
 		switch s {
 		case syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT:
+			pprof.StopCPUProfile()
+			fmt.Println("exit")
 			exitHandler()
 		default:
 			fmt.Println("signal ", s)
