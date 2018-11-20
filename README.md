@@ -16,7 +16,6 @@ a slimple demo that use go to realize redis like nosql
 * 时间任务，清理过期key
 * 页面置换算法LRU,LFU
 * 主从同步
-* 支持持久化
 * 支持事务ACID特性
 * 性能优化
 * 使用协程的情况下，处理并发冲突
@@ -29,6 +28,7 @@ a slimple demo that use go to realize redis like nosql
 * 支持list数据类型
 * 默认配置启动
 * 代码结构整理
+* 支持持久化
 > 引用代码
 * [https://github.com/chaozh/MIT-6.824/issues/3)
 * [https://github.com/Skycrab/cham/tree/master/lib/zset)
