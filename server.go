@@ -13,6 +13,7 @@ import (
 	"os/signal"
 	"runtime"
 	"runtime/pprof"
+	"sync"
 	"syscall"
 	//reuse "github.com/libp2p/go-reuseport"
 	//_ "net/http/pprof"
@@ -33,7 +34,10 @@ func coreArg() {
 		}
 	}
 }
-func listenPort(conf *config.Config,num int){
+func listenPort(conf *config.Config,num int,deferFunc func()){
+	defer func() {
+		deferFunc()
+	}()
 	/*---- 监听请求 ---- */
 	osName := runtime.GOOS
 	archName := runtime.GOARCH
@@ -68,7 +72,17 @@ func listenPort(conf *config.Config,num int){
 		go handleConnection(conn,num) //, err
 	}
 }
-func listenUinxSocket(num int){
+func listenUinxSocket(num int,deferFunc func()){
+	defer func() {
+		deferFunc()
+	}()
+	defer func(){
+		fmt.Println("Enter defer function.")
+		if p := recover(); p != nil {
+			fmt.Printf("panic: %s\n", p)
+		}
+		fmt.Println("Exit defer function.")
+	}()
 	listener, _ := net.Listen("unix", "/tmp/gedis.sock")
 	defer listener.Close()
 	/*---- 循环接受请求 ---- */
@@ -84,6 +98,19 @@ func listenUinxSocket(num int){
 
 }
 func main() {
+	defer func(){
+		fmt.Println("Enter defer function.")
+		if p := recover(); p != nil {
+			fmt.Printf("panic: %s\n", p)
+		}
+		fmt.Println("Exit defer function.")
+	}()
+	// 引发 panic。
+	//go func() {
+	//	panic(errors.New("something wrong"))
+	//}()
+	//fmt.Println("Exit function main.")
+
 	//procs := runtime.GOMAXPROCS(8)	//查看利用的核心数
 
 	//性能分析
@@ -117,10 +144,16 @@ func main() {
 	/*---- server初始化 ----*/
 	gdServer.RunServer(conf)
 
+	//在使用WaitGroup值实现一对多的 goroutine 协作流程
+	var wg sync.WaitGroup
+	wg.Add(2)
+
 	//多个协程监听端口
 	//go listenPort(conf,1)
-	go listenUinxSocket(2)
-	listenPort(conf,3)
+	go listenUinxSocket(2,wg.Done)
+	go listenPort(conf,3,wg.Done)
+
+	wg.Wait()
 
 }
 
