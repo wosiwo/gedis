@@ -7,11 +7,13 @@ import (
 	"container/list"
 	"errors"
 	"fmt"
+	"gedis/core/heap"
 	"log"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 type HASHTBVal struct {
@@ -75,6 +77,15 @@ func (s *GedisServer) ProcessCommand(c *GdClient) error {
 	}
 	return nil
 }
+func (s *GedisServer) Del(c *GdClient) {
+	_, ok := s.DB[c.DBId].Dict[c.Key]
+	if ok {
+		delete(s.DB[c.DBId].Dict, c.Key)
+	} else {
+		addReplyBulk(c, "nil")
+		fmt.Printf("%s is not exsit \n", c.Key)
+	}
+}
 
 //get
 func (s *GedisServer) Get(c *GdClient) {
@@ -101,6 +112,18 @@ func (s *GedisServer) Set(c *GdClient) {
 	var valObj *ValueObj
 	db := &s.DB[c.DBId]
 	Value := c.Argv[6]
+	if len(c.Argv) >= 8 {
+		t := time.Now()
+		now := t.Unix()
+		second, err := strconv.ParseInt(c.Argv[8], 10, 64)
+		if err != nil {
+			fmt.Println("字符串转换成整数失败")
+		}
+		delTime := now + second
+		node := heap.Node{}
+		node.Value = delTime
+		node.Key = c.Key
+	}
 	valObj, ok := db.Dict[c.Key]
 	//defer func(ok bool) {
 	//	if ok {
@@ -499,6 +522,7 @@ func initCommand(gdServer *GedisServer) {
 	lpushCommand := &GedisCommand{Name: "LPUSH", Proc: gdServer.LPush, IsWrite: true}
 	lpopCommand := &GedisCommand{Name: "LPOP", Proc: gdServer.LPop, IsWrite: true}
 	comandComand := &GedisCommand{Name: "COMMAND", Proc: gdServer.Command, IsWrite: false}
+	comandDel := &GedisCommand{Name: "DEL", Proc: gdServer.Del, IsWrite: true}
 
 	gdServer.Commands = map[string]*GedisCommand{
 		"GET":      getCommand,
@@ -513,6 +537,7 @@ func initCommand(gdServer *GedisServer) {
 		"LPUSH":    lpushCommand,
 		"LPOP":     lpopCommand,
 		"COMMAND":  comandComand,
+		"DEL":      comandDel,
 	}
 }
 

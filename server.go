@@ -41,6 +41,8 @@ func main() {
 	sc := make(chan os.Signal)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	go sigHandler(sc)
+	/*---- 定时清除过期key ----*/
+
 	/*---- 处理消费队列 ----*/
 	go consumeWrite()
 	/*---- server初始化 ----*/

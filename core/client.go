@@ -36,6 +36,7 @@ func (c *GdClient) ProcessInputBuffer(s *GedisServer) error {
 		//fmt.Println(len(cmdStrArr))
 		c.Argc = cmdLen
 		c.Argv = cmdStrArr
+		//fmt.Print(c.Argv)
 		c.CommandName = c.Argv[2]
 		if len(cmdStrArr) >= 6 {
 			c.Key = c.Argv[4]
