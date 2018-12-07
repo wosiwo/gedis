@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 )
 
 var gdServer = new(core.GedisServer)
@@ -41,8 +42,8 @@ func main() {
 	sc := make(chan os.Signal)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	go sigHandler(sc)
-	/*---- 定时清除过期key ----*/
-
+	/*---- 定时清除任务key ----*/
+	go clearTime(gdServer)
 	/*---- 处理消费队列 ----*/
 	go consumeWrite()
 	/*---- server初始化 ----*/
@@ -63,6 +64,17 @@ func main() {
 		//fmt.Println("A client connected : " + tcpConn.RemoteAddr().String())
 		/*---- 循环处理请求 ---- */
 		go handleConnection(conn) //, err
+	}
+}
+
+//每秒定时器
+func clearTime(gdServer *core.GedisServer) {
+	timer1 := time.NewTicker(1 * time.Second)
+	for {
+		select {
+		case <-timer1.C:
+			gdServer.ClearExpireKey()
+		}
 	}
 }
 

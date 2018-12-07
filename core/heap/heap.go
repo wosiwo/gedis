@@ -2,6 +2,7 @@ package heap
 
 import (
 	"fmt"
+	"sync"
 )
 
 type Node struct {
@@ -10,34 +11,19 @@ type Node struct {
 }
 
 type Heap struct {
-	list   []*Node
-	length int
+	List   []*Node
+	Length int
+	Mut    sync.Mutex
 }
-
-////创建堆
-//func CreateHeap() {
-//	arrList := []int{1, 2, 11, 3, 7, 8, 4, 5}
-//	var myHeap Heap
-//	myHeap.list = append(myHeap.list, &Node{})
-//	for _, value := range arrList {
-//		tmp := Node{}
-//		tmp.Value = value
-//		myHeap.InsertHeap(&tmp)
-//	}
-//	for {
-//		node := myHeap.GetTopHeap()
-//		fmt.Println(node)
-//	}
-//	myHeap.SortHeap(myHeap.list)
-//	heapShow(myHeap.list)
-//}
 
 //插入堆
 func (h *Heap) InsertHeap(one *Node) {
-	h.list = append(h.list, one)
-	length := len(h.list)
-	h.length = length - 1
-	h.AdjustHeap(h.length)
+	h.Mut.Lock()
+	defer h.Mut.Unlock()
+	h.List = append(h.List, one)
+	length := len(h.List)
+	h.Length = length - 1
+	h.AdjustHeap(h.Length)
 }
 
 //堆排序
@@ -57,7 +43,7 @@ func (h *Heap) SortHeap(heaps []*Node) {
 	}
 	//反序
 	minPos := 1
-	maxPos := h.length
+	maxPos := h.Length
 	for minPos < maxPos {
 		h.SliceNodeSwap(minPos, maxPos)
 		minPos++
@@ -71,13 +57,13 @@ func (h *Heap) AdjustHeap(length int) {
 		return
 	}
 	if length == 2 {
-		if h.list[length].Value > h.list[length-1].Value {
+		if h.List[length].Value < h.List[length-1].Value {
 			h.SliceNodeSwap(length, length-1)
 		}
 		return
 	}
 	i := length
-	for i/2 > 0 && h.list[i].Value > h.list[i/2].Value {
+	for i/2 > 0 && h.List[i].Value < h.List[i/2].Value {
 		h.SliceNodeSwap(i, i/2)
 		i = i / 2
 	}
@@ -93,24 +79,31 @@ func heapShow(heaps []*Node) {
 
 //node slice交换
 func (h *Heap) SliceNodeSwap(i int, j int) {
-	x := h.list[i]
-	h.list[i] = h.list[j]
-	h.list[j] = x
+	x := h.List[i]
+	h.List[i] = h.List[j]
+	h.List[j] = x
 }
 
 //自上向下堆化
 func (h *Heap) Heapfiy(length int, pos int) {
+	if length == 2 {
+		if h.List[1].Value > h.List[2].Value {
+			h.SliceNodeSwap(1, 2)
+			return
+		}
+	}
 	for {
 		maxPos := pos
-		if pos*2 < length && h.list[pos].Value < h.list[pos*2].Value {
+		if pos*2 < length && h.List[pos].Value > h.List[pos*2].Value {
 			maxPos = pos * 2
 		}
-		if pos*2+1 < length && h.list[maxPos].Value < h.list[pos*2+1].Value {
+		if pos*2+1 < length && h.List[maxPos].Value > h.List[pos*2+1].Value {
 			maxPos = pos*2 + 1
 		}
 		if maxPos == pos {
 			break
 		}
+		fmt.Println(pos, maxPos)
 		h.SliceNodeSwap(pos, maxPos)
 		pos = maxPos
 	}
@@ -118,18 +111,20 @@ func (h *Heap) Heapfiy(length int, pos int) {
 
 //获取堆顶
 func (h *Heap) GetTopHeap() *Node {
-	if h.length == 0 {
+	if h.Length == 0 {
 		panic("Heap is empty")
 	}
-	top := h.list[1]
+	h.Mut.Lock()
+	defer h.Mut.Unlock()
+	top := h.List[1]
 	//堆顶和堆底交换
-	h.SliceNodeSwap(1, len(h.list)-1)
-	length := len(h.list) - 2
+	h.SliceNodeSwap(1, len(h.List)-1)
+	length := len(h.List) - 2
 	fmt.Println(length)
 	h.Heapfiy(length, 1)
-	heapShow(h.list)
-	h.list = append(h.list[:length+1], h.list[length+2:]...)
-	h.length--
+	h.List = append(h.List[:length+1], h.List[length+2:]...)
+	heapShow(h.List)
+	h.Length--
 	return top
 
 }

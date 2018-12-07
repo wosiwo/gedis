@@ -38,7 +38,7 @@ type GetReply struct {
 //hash
 type HSetArgs struct {
 	Key   string
-	Field   string
+	Field string
 	Value string
 }
 
@@ -47,7 +47,7 @@ type HSetReply struct {
 }
 
 type HGetArgs struct {
-	Key string
+	Key   string
 	Field string
 }
 
@@ -64,7 +64,7 @@ type ZAddArgs struct {
 }
 
 type ZAddReply struct {
-	Err Err
+	Err   Err
 	Value string
 }
 
@@ -77,6 +77,7 @@ type ZScoreReply struct {
 	Err   Err
 	Value float64
 }
+
 //
 // Client
 //
@@ -113,7 +114,7 @@ func put(key string, val string) {
 }
 
 //hash
-func hset(key string,field string, val string) {
+func hset(key string, field string, val string) {
 	client := connect()
 	args := HSetArgs{key, field, val}
 	reply := PutReply{}
@@ -124,7 +125,7 @@ func hset(key string,field string, val string) {
 	client.Close()
 }
 
-func hget(key string,field string) string {
+func hget(key string, field string) string {
 	client := connect()
 	args := HGetArgs{key, field}
 	reply := HGetReply{}
@@ -137,7 +138,7 @@ func hget(key string,field string) string {
 }
 
 //zset
-func zadd(key string,member string, score float64) {
+func zadd(key string, member string, score float64) {
 	client := connect()
 	args := ZAddArgs{key, member, score}
 	reply := ZAddReply{}
@@ -148,7 +149,7 @@ func zadd(key string,member string, score float64) {
 	client.Close()
 }
 
-func zscore(key string,member string) float64 {
+func zscore(key string, member string) float64 {
 	client := connect()
 	args := ZScoreArgs{key, member}
 	reply := ZScoreReply{}
@@ -173,7 +174,7 @@ func main() {
 	//hset("keyname","fname", "6.824")
 	//fmt.Printf("get(keyname) -> %s\n", hget("keyname","fname"))
 
-	zadd("keyname","fname", 6.824)
-	fmt.Printf("get(keyname) -> %f\n", zscore("keyname","fname"))
+	zadd("keyname", "fname", 6.824)
+	fmt.Printf("get(keyname) -> %f\n", zscore("keyname", "fname"))
 
 }

@@ -4,8 +4,8 @@ package zset
 import "C"
 
 import (
-	"bufio"
 	"../helper"
+	"bufio"
 	"encoding/json"
 	"errors"
 	"os"
