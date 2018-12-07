@@ -81,15 +81,12 @@ func (s *GedisServer) ProcessCommand(c *GdClient) error {
 
 func (s *GedisServer) ClearExpireKey() {
 	for {
-		fmt.Println(s.DeleteHeap)
 		if s.DeleteHeap.Length == 0 {
 			break
 		}
 		node := s.DeleteHeap.List[1]
-		fmt.Println(node)
 		t := time.Now()
 		now := t.Unix()
-		fmt.Println(now)
 		if node.Value <= now {
 			s.DeleteHeap.GetTopHeap()
 			fmt.Println(node.Key, " is cleaned!")
@@ -138,10 +135,10 @@ func (s *GedisServer) Set(c *GdClient) {
 	var valObj *ValueObj
 	db := &s.DB[c.DBId]
 	Value := c.Argv[6]
+	//可过期key
 	if len(c.Argv) >= 9 {
 		t := time.Now()
 		now := t.Unix()
-		fmt.Println(c.Argv)
 		second, err := strconv.ParseInt(c.Argv[8], 10, 64)
 		if err != nil {
 			fmt.Println("字符串转换成整数失败")

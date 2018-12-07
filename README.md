@@ -13,7 +13,6 @@ a slimple demo that use go to realize redis like nosql
   redis-cli -p 9997
   ```
 ### TODO
-* 时间任务，清理过期key
 * 页面置换算法LRU,LFU
 * 主从同步
 * 支持事务ACID特性
@@ -21,6 +20,7 @@ a slimple demo that use go to realize redis like nosql
 * 使用协程的情况下，处理并发冲突
 * 操作已存在key时，先判断类型
 ### DONE
+* 时间任务，清理过期key
 * 统一db的存储结构
 * 支持redis通信协议
 * 使用纯go实现的跳跃表
