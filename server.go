@@ -228,14 +228,9 @@ func handleConnection(conn net.Conn,num int) {
 func handleCommand(c *core.GdClient) {
 	//fmt.Println(c)
 	var err error
-	if c.Cmd.IsWrite  {	//创建新key才需要窜行执行
-		if gdServer.IsLogChannel && c.IsNew {
-			//fmt.Println(c)
-			gdServer.WriteC <- *c
-			return
-		} else {
-			err = gdServer.ProcessCommand(c) //执行命令
-		}
+	if c.Cmd.IsWrite && c.IsNew {	//创建新key才需要窜行执行
+		gdServer.WriteC <- *c
+		return
 	} else {
 		err = gdServer.ProcessCommand(c) //执行命令
 	}
