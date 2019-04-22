@@ -444,7 +444,6 @@ func (s *GedisServer)call(c *GdClient) {
 	}else{
 		s.DB[c.DBId].Rw.RUnlock()
 	}
-	SendReplyToClient(c)
 }
 
 // 负责传送命令回复的写处理器
