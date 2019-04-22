@@ -475,7 +475,7 @@ func (s *GedisServer) RunServer(conf *config.Config) {
 	s.DBnum = 16
 	s.Pid = os.Getpid()
 	//是否开启channel
-	s.IsLogChannel = conf.GetBoolDefault("isChannel", false)
+	s.IsLogChannel = conf.GetBoolDefault("IsLogChannel", false)
 	s.WriteC = make(chan GdClient, 1)
 	if s.IsLogChannel {
 		s.LogC = make(chan GdClient, 1)
