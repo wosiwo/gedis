@@ -184,6 +184,14 @@ func consumeLog() {
 
 //长连接入口
 func handleConnection(conn net.Conn,num int) {
+	defer func(){
+		fmt.Println("Enter defer function.")
+		if p := recover(); p != nil {
+			fmt.Printf("panic: %s\n", p)
+		}
+		fmt.Println("Exit defer function.")
+	}()
+
 	c := gdServer.CreateClient()
 	c.Cn = conn //命令
 	buffer := make([]byte, 1024)

@@ -31,7 +31,7 @@ type ValueObj struct {
 每个数据库节点的数据结构
 */
 type GedisDB struct {
-	Mu   sync.Mutex
+	Rw   sync.RWMutex
 	Dict map[string]*ValueObj
 }
 
@@ -69,7 +69,7 @@ func (s *GedisServer) CreateClient() (c *GdClient) {
 func (s *GedisServer) ProcessCommand(c *GdClient) error {
 	//fmt.Println(cmd, cmdName, s)
 	if c.Cmd != nil {
-		call(c)
+		s.call(c)
 	} else {
 		fmt.Println("(error) ERR unknown command ", c.CommandName)
 		return errors.New("ProcessInputBuffer failed")
@@ -159,7 +159,7 @@ func (s *GedisServer) HSet(c *GdClient) {
 		}
 	}(ok)
 	if !ok {
-		defer db.Mu.Unlock()
+		defer db.Rw.Unlock()
 		var hsval = new(HASHTBVal)
 		valObj = new(ValueObj)
 		valObj.Datatype = 1
@@ -222,8 +222,8 @@ func (s *GedisServer) ZAdd(c *GdClient) {
 		}
 	}(ok)
 	if !ok {
-		//db.Mu.Lock() //创建新键值对时才使用全局锁
-		//defer db.Mu.Unlock()
+		//db.Rw.Lock() //创建新键值对时才使用全局锁
+		//defer db.Rw.Unlock()
 		//创建新key，由通道保证串行执行
 		zval := table.New()
 		zval.Add(Score, Mem)
@@ -366,8 +366,8 @@ func (s *GedisServer) LPush(c *GdClient) {
 		}
 	}(ok)
 	if !ok {
-		//db.Mu.Lock() //创建新键值对时才使用全局锁
-		//defer db.Mu.Unlock()
+		//db.Rw.Lock() //创建新键值对时才使用全局锁
+		//defer db.Rw.Unlock()
 		//不存在存在
 		lval = *list.New()
 		//值对象
@@ -430,8 +430,20 @@ func (s *GedisServer) lookupCommand(name string) *GedisCommand {
 }
 
 //调用命令的实现函数，执行命令
-func call(c *GdClient) {
+func (s *GedisServer)call(c *GdClient) {
+	//加锁
+	if c.IsNew {
+		s.DB[c.DBId].Rw.Lock()	//给db加写锁
+	}else{
+		s.DB[c.DBId].Rw.RLock()	//给db加读锁
+	}
 	c.Cmd.Proc(c)
+	//解锁
+	if c.IsNew {
+		s.DB[c.DBId].Rw.Unlock()
+	}else{
+		s.DB[c.DBId].Rw.RUnlock()
+	}
 	SendReplyToClient(c)
 }
 

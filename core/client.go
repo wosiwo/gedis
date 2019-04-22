@@ -43,11 +43,13 @@ func (c *GdClient) ProcessInputBuffer(s *GedisServer) error {
 			fmt.Println(cmdStrArr)
 		}
 		c.Cmd = s.lookupCommand(c.CommandName)
+		s.DB[c.DBId].Rw.RLock()	//加读锁
 		if _, ok := s.DB[c.DBId].Dict[c.Key]; ok {
 			c.IsNew = false
 		} else {
 			c.IsNew = true
 		}
+		s.DB[c.DBId].Rw.RUnlock()	//加读锁
 	} else {
 		c.Cmd = &GedisCommand{}
 		c.Cmd.IsWrite = false
