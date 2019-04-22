@@ -45,7 +45,7 @@ func listenPort(conf *config.Config,num int,deferFunc func()){
 	fmt.Println(archName)
 	//switch runtime.GOOS { case "darwin": case "windows": case "linux": }
 	//ifReUsePort := {"darwin":0}
-	if osName != "darwin" {	//TODO linux下开启多端口监听同个实例
+	if osName != "darwin" {	//TODO linux下开启多协程监听同个端口
 		net.USE_SO_REUSEPORT = true
 	}
 
@@ -139,8 +139,10 @@ func main() {
 	sc := make(chan os.Signal)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	go sigHandler(sc)
-	/*---- 处理消费队列 ----*/
+	/*---- 处理新建key ----*/
 	go consumeWrite()
+	/*---- 处理日志写入 ----*/
+	go consumeLog()
 	/*---- server初始化 ----*/
 	gdServer.RunServer(conf)
 
@@ -160,10 +162,14 @@ func main() {
 //消费写操作
 func consumeWrite() {
 	for c := range gdServer.WriteC {
-		gdServer.ProcessCommand(&c) //执行命令
+		gdServer.ProcessCommand(&c) //串行执行新建key命令
+	}
+}
+//串行写入日志 TODO 根据key哈希到不同的消费协程中
+func consumeLog() {
+	for c := range gdServer.LogC {
 		//写入日志
 		if c.FakeFlag == false {
-			SendReplyToClient(&c)
 			gdServer.CmdBuffer.Cmd += c.QueryBuf
 			gdServer.CmdBuffer.Num++
 			//fmt.Println(gdServer.AofLoadNum)
@@ -201,11 +207,12 @@ func handleConnection(conn net.Conn,num int) {
 		//fmt.Println(c)
 		if c.Cmd.Proc == nil {
 			fmt.Println(c)
-			SendReplyToClient(c)
+			core.SendReplyToClient(c)
 			continue
 		}
 		//TODO 手动进行心跳检查
-		go handleCommand(c)
+		//除了主从同步，正常客户端连接在没有收到服务端响应时，不应发送第二次请求，所以这里不再开启新的协程
+		handleCommand(c)
 	}
 }
 
@@ -213,8 +220,8 @@ func handleConnection(conn net.Conn,num int) {
 func handleCommand(c *core.GdClient) {
 	//fmt.Println(c)
 	var err error
-	if c.Cmd.IsWrite {
-		if gdServer.IsChannel {
+	if c.Cmd.IsWrite  {	//创建新key才需要窜行执行
+		if gdServer.IsLogChannel && c.IsNew {
 			//fmt.Println(c)
 			gdServer.WriteC <- *c
 			return
@@ -230,26 +237,9 @@ func handleCommand(c *core.GdClient) {
 		return
 	}
 	//返回数据给客户端
-	SendReplyToClient(c)
+	core.SendReplyToClient(c)
 }
 
-// 负责传送命令回复的写处理器
-func SendReplyToClient(c *core.GdClient) {
-	len := len(c.Buf)
-	if len == 0 {
-		//fmt.Println("replyVal ")
-		//c.RW.Write([]byte("+OK"))
-		_, err := c.Cn.Write([]byte("$1\r\n0\r\n"))
-		if err != nil {
-			log.Println("Cannot write to connection.\n", err)
-		}
-	} else {
-		rep := fmt.Sprintf("$%d\r\n%s\r\n", len, c.Buf)
-		//fmt.Println("replyVal " + c.Buf)
-		c.Cn.Write([]byte(rep))
-	}
-	//conn.Close()
-}
 
 //信号处理
 func sigHandler(c chan os.Signal) {
@@ -267,7 +257,7 @@ func sigHandler(c chan os.Signal) {
 
 //退出处理
 func exitHandler() {
-	if gdServer.IsChannel {
+	if gdServer.IsLogChannel {
 		gdServer.CmdBuffer.Mut.Lock()
 		aof.AppendToFile(gdServer.AofPath, gdServer.CmdBuffer.Cmd)
 		gdServer.CmdBuffer.Mut.Unlock()

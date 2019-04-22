@@ -12,3 +12,10 @@
 *.out
 .idea/
 *.prof
+w/000000.vlog
+p/LOCK
+conf/aof.log
+w/LOCK
+p/000000.vlog
+w/MANIFEST
+p/MANIFEST

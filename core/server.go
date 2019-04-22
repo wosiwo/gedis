@@ -36,15 +36,16 @@ type GedisDB struct {
 }
 
 type GedisServer struct {
-	DBnum      int
-	Pid        int
-	DB         []GedisDB
-	WriteC     chan GdClient //写channel
-	IsChannel  bool
-	CmdBuffer  aof.CmdBuffer
-	Commands   map[string]*GedisCommand
-	AofPath    string
-	AofLoadNum int
+	DBnum        int
+	Pid          int
+	DB           []GedisDB
+	WriteC       chan GdClient //写channel
+	LogC         chan GdClient //日志channel
+	IsLogChannel bool
+	CmdBuffer    aof.CmdBuffer
+	Commands     map[string]*GedisCommand
+	AofPath      string
+	AofLoadNum   int
 }
 
 //命令函数指针
@@ -102,18 +103,18 @@ func (s *GedisServer) Set(c *GdClient) {
 	db := &s.DB[c.DBId]
 	Value := c.Argv[6]
 	valObj, ok := db.Dict[c.Key]
-	//defer func(ok bool) {
-	//	if ok {
-	//		valObj.Rw.Unlock() //解除写锁
-	//	}
-	//}(ok)
+	defer func(ok bool) {
+		if ok {
+			valObj.Rw.Unlock() //解除写锁
+		}
+	}(ok)
 	if !ok {
 		valObj = new(ValueObj)
 		valObj.Value = Value
 		valObj.Datatype = 0
 		db.Dict[c.Key] = valObj
 	} else {
-		//valObj.Rw.Lock()
+		valObj.Rw.Lock()
 		//valObj = db.Dict[c.Key]
 		valObj.Value = Value
 	}
@@ -172,8 +173,8 @@ func (s *GedisServer) HSet(c *GdClient) {
 		hsval := valObj.Value.(*HASHTBVal)
 		hsval.Data[Field] = Value
 	}
-	if s.IsChannel {
-		s.WriteC <- *c
+	if s.IsLogChannel {
+		s.LogC <- *c
 	}
 	fmt.Printf("HSet key %s Field %s Value %s\n", c.Key, Field, Value)
 	addReplyBulk(c, "+OK")
@@ -199,8 +200,8 @@ func (s *GedisServer) ZScore(c *GdClient) {
 	}
 	fmt.Printf("HGet key %s Field %s \n", c.Key, Mem)
 	fmt.Printf("HGet val %s\n", val)
-	if s.IsChannel {
-		s.WriteC <- *c
+	if s.IsLogChannel {
+		s.LogC <- *c
 	}
 	if ok {
 		addReplyBulk(c, strconv.FormatInt(int64(val), 10))
@@ -221,8 +222,9 @@ func (s *GedisServer) ZAdd(c *GdClient) {
 		}
 	}(ok)
 	if !ok {
-		db.Mu.Lock() //创建新键值对时才使用全局锁
-		defer db.Mu.Unlock()
+		//db.Mu.Lock() //创建新键值对时才使用全局锁
+		//defer db.Mu.Unlock()
+		//创建新key，由通道保证串行执行
 		zval := table.New()
 		zval.Add(Score, Mem)
 		//值对象
@@ -240,8 +242,8 @@ func (s *GedisServer) ZAdd(c *GdClient) {
 		zval := valObj.Value.(*table.ZSetType)
 		zval.Add(Score, Mem)
 	}
-	if s.IsChannel {
-		s.WriteC <- *c
+	if s.IsLogChannel {
+		s.LogC <- *c
 	}
 	fmt.Printf("ZAdd key %s Score %s Mem %s\n", c.Key, Score, Mem)
 	addReplyBulk(c, "+OK")
@@ -262,8 +264,6 @@ func (s *GedisServer) SAdd(c *GdClient) {
 		}
 	}(ok)
 	if !ok {
-		//db.Mu.Lock() //创建新键值对时才使用全局锁
-		//defer db.Mu.Unlock()
 		//不存在存在
 		sval = table.NewSet(Mems...)
 		//值对象
@@ -287,8 +287,8 @@ func (s *GedisServer) SAdd(c *GdClient) {
 
 	fmt.Printf("SAdd key %s Score %s Mem \n", c.Key)
 	fmt.Println(Mems)
-	if s.IsChannel {
-		s.WriteC <- *c
+	if s.IsLogChannel {
+		s.LogC <- *c
 	}
 	addReplyBulk(c, "+OK")
 
@@ -366,8 +366,8 @@ func (s *GedisServer) LPush(c *GdClient) {
 		}
 	}(ok)
 	if !ok {
-		db.Mu.Lock() //创建新键值对时才使用全局锁
-		defer db.Mu.Unlock()
+		//db.Mu.Lock() //创建新键值对时才使用全局锁
+		//defer db.Mu.Unlock()
 		//不存在存在
 		lval = *list.New()
 		//值对象
@@ -384,8 +384,8 @@ func (s *GedisServer) LPush(c *GdClient) {
 		lval.PushFront(item)
 	}
 	db.Dict[c.Key] = valObj
-	if s.IsChannel {
-		s.WriteC <- *c
+	if s.IsLogChannel {
+		s.LogC <- *c
 	}
 	fmt.Printf("LPush key %s Mem \n", c.Key)
 	fmt.Println(Mems)
@@ -413,8 +413,8 @@ func (s *GedisServer) LPop(c *GdClient) {
 			Value = lval.Remove(lval.Front()).(string)
 		}
 	}
-	if s.IsChannel {
-		s.WriteC <- *c
+	if s.IsLogChannel {
+		s.LogC <- *c
 	}
 	fmt.Printf("LPush key %s Mem \n", c.Key)
 	addReplyBulk(c, Value)
@@ -432,6 +432,25 @@ func (s *GedisServer) lookupCommand(name string) *GedisCommand {
 //调用命令的实现函数，执行命令
 func call(c *GdClient) {
 	c.Cmd.Proc(c)
+	SendReplyToClient(c)
+}
+
+// 负责传送命令回复的写处理器
+func SendReplyToClient(c *GdClient) {
+	len := len(c.Buf)
+	if len == 0 {
+		//fmt.Println("replyVal ")
+		//c.RW.Write([]byte("+OK"))
+		_, err := c.Cn.Write([]byte("$1\r\n0\r\n"))
+		if err != nil {
+			log.Println("Cannot write to connection.\n", err)
+		}
+	} else {
+		rep := fmt.Sprintf("$%d\r\n%s\r\n", len, c.Buf)
+		//fmt.Println("replyVal " + c.Buf)
+		c.Cn.Write([]byte(rep))
+	}
+	//conn.Close()
 }
 
 //返回一个 数据
@@ -445,9 +464,10 @@ func (s *GedisServer) RunServer(conf *config.Config) {
 	s.DBnum = 16
 	s.Pid = os.Getpid()
 	//是否开启channel
-	s.IsChannel = conf.GetBoolDefault("isChannel", false)
-	if s.IsChannel {
-		s.WriteC = make(chan GdClient, 1)
+	s.IsLogChannel = conf.GetBoolDefault("isChannel", false)
+	s.WriteC = make(chan GdClient, 1)
+	if s.IsLogChannel {
+		s.LogC = make(chan GdClient, 1)
 		//是否开启channel 必须配置日志路径
 		s.AofPath = conf.GetIStringDefault("aof_path", "./conf/aof.log")
 		s.AofLoadNum = conf.GetIntDefault("aof_load_num", 1)
@@ -457,7 +477,7 @@ func (s *GedisServer) RunServer(conf *config.Config) {
 	//初始化命令哈希表
 	initCommand(s)
 	//加载aof日志
-	if s.IsChannel {
+	if s.IsLogChannel {
 		LoadData(s)
 	}
 }
