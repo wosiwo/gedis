@@ -432,14 +432,14 @@ func (s *GedisServer) lookupCommand(name string) *GedisCommand {
 //调用命令的实现函数，执行命令
 func (s *GedisServer)call(c *GdClient) {
 	//加锁
-	if c.IsNew {
+	if c.IsNew && c.Cmd.IsWrite {
 		s.DB[c.DBId].Rw.Lock()	//给db加写锁
 	}else{
 		s.DB[c.DBId].Rw.RLock()	//给db加读锁
 	}
 	c.Cmd.Proc(c)
 	//解锁
-	if c.IsNew {
+	if c.IsNew && c.Cmd.IsWrite {
 		s.DB[c.DBId].Rw.Unlock()
 	}else{
 		s.DB[c.DBId].Rw.RUnlock()
